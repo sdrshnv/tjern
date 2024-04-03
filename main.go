@@ -38,6 +38,7 @@ type model struct {
 	focusIdx      int
 	loginInputs   []textinput.Model
 	loginErr      string
+	registerErr   string
 	onLoginScreen bool
 	jwt           string
 	onHomePage    bool
@@ -82,6 +83,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.onLoginScreen {
 
 		switch msg := msg.(type) {
+		case RegisterMsg:
+			if msg.IsSuccess {
+				m.onLoginScreen = false
+				m.onHomePage = true
+				m.jwt = msg.Jwt
+			} else {
+				m.registerErr = msg.Err
+			}
 		case LoginMsg:
 			if msg.IsSuccess {
 				m.onLoginScreen = false
@@ -101,8 +110,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, func() tea.Msg { return Login(m.loginInputs[0].Value(), m.loginInputs[1].Value()) }
 				}
 				if s == tea.KeyEnter.String() && m.focusIdx == len(m.loginInputs)+1 {
-					// TODO: registration
-					return m, nil
+					return m, func() tea.Msg { return Register(m.loginInputs[0].Value(), m.loginInputs[1].Value()) }
 				}
 				if s == tea.KeyUp.String() || s == tea.KeyShiftTab.String() {
 					m.focusIdx--
@@ -184,6 +192,7 @@ func (m model) View() string {
 		fmt.Fprintf(&b, "\n\n%s", *loginButton)
 		b.WriteString(" " + m.loginErr + "\n")
 		fmt.Fprintf(&b, "%s\n\n", *registerButton)
+		b.WriteString(" " + m.registerErr + "\n")
 
 		return b.String()
 	}
@@ -206,20 +215,45 @@ type LoginMsg struct {
 	Jwt       string
 }
 
-// type RegisterMs struct {
-// 	Err       string
-// 	IsSuccess bool
-// }
+type RegisterMsg struct {
+	Err       string
+	IsSuccess bool
+	Jwt       string
+}
 
-// func Register(username string, password string) tea.Msg {
-// 	c := &http.Client{
-// 		Timeout: 10 * time.Second,
-// 	}
-// 	data := map[string]string{
-// 		"username": username,
-// 		"password": password,
-// 	}
-// }
+func Register(username string, password string) tea.Msg {
+	data := map[string]string{
+		"username": username,
+		"password": password,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return RegisterMsg{Err: "Failed to marshal registration data, " + err.Error(), IsSuccess: false}
+	}
+	registerUrl := baseUrl + "/api/register"
+	resp, err := client.Post(registerUrl, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return RegisterMsg{Err: fmt.Sprintf("Registration failed: %s", err.Error()), IsSuccess: false}
+	}
+	if resp.StatusCode != http.StatusOK {
+		return RegisterMsg{Err: "Registration failed", IsSuccess: false}
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return RegisterMsg{Err: "Error reading from response body", IsSuccess: false}
+	}
+	type registerResp struct {
+		Jwt string `json:"jwt"`
+	}
+	var registerResponse registerResp
+	err = json.Unmarshal(body, &registerResponse)
+	if err != nil {
+		return RegisterMsg{Err: "Cannot unmarshal registration response", IsSuccess: false}
+	}
+	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt}
+}
 
 func Login(username string, password string) tea.Msg {
 	data := map[string]string{
