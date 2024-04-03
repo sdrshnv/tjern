@@ -40,6 +40,7 @@ type model struct {
 	onLoginScreen bool
 	jwt           string
 	onHomePage    bool
+	username      string
 	// cursorMode cursor.Mode
 }
 
@@ -86,6 +87,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onLoginScreen = false
 				m.onHomePage = true
 				m.jwt = msg.Jwt
+				m.username = msg.Username
 			} else {
 				m.registerErr = msg.Err
 			}
@@ -94,6 +96,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onLoginScreen = false
 				m.onHomePage = true
 				m.jwt = msg.Jwt
+				m.username = msg.Username
 			} else {
 				m.loginErr = msg.Err
 			}
@@ -195,7 +198,7 @@ func (m model) View() string {
 		return b.String()
 	}
 	if m.onHomePage {
-		return "Logged in!"
+		return fmt.Sprintf("Welcome %s!", m.username)
 	}
 	return ""
 }
@@ -211,12 +214,14 @@ type LoginMsg struct {
 	Err       string
 	IsSuccess bool
 	Jwt       string
+	Username  string
 }
 
 type RegisterMsg struct {
 	Err       string
 	IsSuccess bool
 	Jwt       string
+	Username  string
 }
 
 func Register(username string, password string) tea.Msg {
@@ -250,7 +255,7 @@ func Register(username string, password string) tea.Msg {
 	if err != nil {
 		return RegisterMsg{Err: "Cannot unmarshal registration response", IsSuccess: false}
 	}
-	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt}
+	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt, Username: username}
 }
 
 func Login(username string, password string) tea.Msg {
@@ -284,5 +289,5 @@ func Login(username string, password string) tea.Msg {
 	if err != nil {
 		return LoginMsg{Err: "Cannot unmarshal login response", IsSuccess: false}
 	}
-	return LoginMsg{Err: "", IsSuccess: true, Jwt: loginResponse.Jwt}
+	return LoginMsg{Err: "", IsSuccess: true, Jwt: loginResponse.Jwt, Username: username}
 }
