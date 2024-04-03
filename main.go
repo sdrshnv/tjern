@@ -200,7 +200,7 @@ func (m model) View() string {
 	if m.onHomePage {
 		return fmt.Sprintf("Welcome %s!", m.username)
 	}
-	return ""
+	return "Unclear which page we're on!"
 }
 
 func main() {
