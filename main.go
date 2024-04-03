@@ -181,7 +181,8 @@ func (m model) View() string {
 		if m.focusIdx == len(m.loginInputs)+1 {
 			registerButton = &focusedRegisterButton
 		}
-		fmt.Fprintf(&b, "\n\n%s\n", *loginButton)
+		fmt.Fprintf(&b, "\n\n%s", *loginButton)
+		b.WriteString(" " + m.loginErr + "\n")
 		fmt.Fprintf(&b, "%s\n\n", *registerButton)
 
 		return b.String()
