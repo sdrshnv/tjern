@@ -39,6 +39,7 @@ type model struct {
 	registerErr   string
 	onLoginScreen bool
 	jwt           string
+	hexSalt       string
 	onHomePage    bool
 	username      string
 	// cursorMode cursor.Mode
@@ -87,6 +88,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onLoginScreen = false
 				m.onHomePage = true
 				m.jwt = msg.Jwt
+				m.hexSalt = msg.HexSalt
 				m.username = msg.Username
 			} else {
 				m.registerErr = msg.Err
@@ -96,11 +98,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onLoginScreen = false
 				m.onHomePage = true
 				m.jwt = msg.Jwt
+				m.hexSalt = msg.HexSalt
 				m.username = msg.Username
 			} else {
 				m.loginErr = msg.Err
 			}
-			return m, nil
 		case tea.KeyMsg:
 			switch msg.String() {
 			case tea.KeyCtrlC.String(), tea.KeyEsc.String():
@@ -214,6 +216,7 @@ type LoginMsg struct {
 	Err       string
 	IsSuccess bool
 	Jwt       string
+	HexSalt   string
 	Username  string
 }
 
@@ -221,6 +224,7 @@ type RegisterMsg struct {
 	Err       string
 	IsSuccess bool
 	Jwt       string
+	HexSalt   string
 	Username  string
 }
 
@@ -248,14 +252,15 @@ func Register(username string, password string) tea.Msg {
 		return RegisterMsg{Err: "Error reading from response body", IsSuccess: false}
 	}
 	type registerResp struct {
-		Jwt string `json:"jwt"`
+		Jwt     string `json:"jwt"`
+		HexSalt string `json:"salt"`
 	}
 	var registerResponse registerResp
 	err = json.Unmarshal(body, &registerResponse)
 	if err != nil {
 		return RegisterMsg{Err: "Cannot unmarshal registration response", IsSuccess: false}
 	}
-	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt, Username: username}
+	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt, HexSalt: registerResponse.HexSalt, Username: username}
 }
 
 func Login(username string, password string) tea.Msg {
@@ -282,12 +287,13 @@ func Login(username string, password string) tea.Msg {
 		return LoginMsg{Err: "Error reading login response body", IsSuccess: false}
 	}
 	type loginResp struct {
-		Jwt string `json:"jwt"`
+		Jwt     string `json:"jwt"`
+		HexSalt string `json:"salt"`
 	}
 	var loginResponse loginResp
 	err = json.Unmarshal(body, &loginResponse)
 	if err != nil {
 		return LoginMsg{Err: "Cannot unmarshal login response", IsSuccess: false}
 	}
-	return LoginMsg{Err: "", IsSuccess: true, Jwt: loginResponse.Jwt, Username: username}
+	return LoginMsg{Err: "", IsSuccess: true, Jwt: loginResponse.Jwt, HexSalt: loginResponse.HexSalt, Username: username}
 }
