@@ -5,18 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	// "github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
+	docStyle     = lipgloss.NewStyle().Margin(1, 2)
 	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	blurredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cursorStyle  = focusedStyle.Copy()
@@ -26,11 +29,28 @@ var (
 	blurredLoginButton    = blurredStyle.Copy().Render("[ Login ]")
 	focusedRegisterButton = focusedStyle.Copy().Render("[ Register ]")
 	blurredRegisterButton = blurredStyle.Copy().Render("[ Register ]")
+	focusedNewEntryButton = focusedStyle.Copy().Render("[ New Entry ]")
+	blurredNewEntryButton = blurredStyle.Copy().Render("[ New Entry ]")
 	baseUrl               = "http://localhost:8787"
 	client                = &http.Client{
 		Timeout: 10 * time.Second,
 	}
 )
+
+type EntryItem struct {
+	encryptedContent string
+	createdTs        time.Time
+}
+
+func (i EntryItem) Title() string       { return i.createdTs.String() }
+func (i EntryItem) Description() string { return i.encryptedContent }
+func (i EntryItem) FilterValue() string { return i.createdTs.String() }
+
+type homePageModel struct {
+	focusIdx int
+	list     list.Model
+	listItems []list.Item
+}
 
 type model struct {
 	focusIdx      int
@@ -41,7 +61,9 @@ type model struct {
 	jwt           string
 	hexSalt       string
 	onHomePage    bool
+	onEntryPage   bool
 	username      string
+	homePage      homePageModel
 	// cursorMode cursor.Mode
 }
 
@@ -50,6 +72,11 @@ func initialModel() model {
 		loginInputs:   make([]textinput.Model, 2),
 		onLoginScreen: true,
 		onHomePage:    false,
+		onEntryPage:   false,
+		homePage: homePageModel{
+			listItems:  make([]list.Item, 0),
+			focusIdx: -1,
+		},
 	}
 
 	var t textinput.Model
@@ -90,6 +117,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.jwt = msg.Jwt
 				m.hexSalt = msg.HexSalt
 				m.username = msg.Username
+				return m, func() tea.Msg { return entries(m.jwt) }
 			} else {
 				m.registerErr = msg.Err
 			}
@@ -100,6 +128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.jwt = msg.Jwt
 				m.hexSalt = msg.HexSalt
 				m.username = msg.Username
+				return m, func() tea.Msg { return entries(m.jwt) }
 			} else {
 				m.loginErr = msg.Err
 			}
@@ -147,6 +176,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	} else if m.onHomePage {
 		switch msg := msg.(type) {
+		case EntriesMsg:
+			if msg.IsSuccess {
+				for _, e := range msg.Entries {
+					m.homePage.listItems = append(m.homePage.listItems, e)
+				}
+				m.homePage.list = list.New(m.homePage.listItems, list.NewDefaultDelegate(), 0, 0)
+				m.homePage.list.Title = "Entries"
+				return m, nil
+			} else {
+				log.Println("failed to get entries")
+				return m, nil
+			}
 		case tea.KeyMsg:
 			switch msg.String() {
 			case tea.KeyCtrlC.String(), tea.KeyEsc.String():
@@ -200,12 +241,28 @@ func (m model) View() string {
 		return b.String()
 	}
 	if m.onHomePage {
-		return fmt.Sprintf("Welcome %s!", m.username)
+		var b strings.Builder
+		newEntryButton := &blurredNewEntryButton
+		if m.homePage.focusIdx == -1 {
+			newEntryButton = &focusedNewEntryButton
+		}
+		fmt.Fprintf(&b, "\n\n%s\n\n", *newEntryButton)
+		b.WriteString(docStyle.Render(m.homePage.list.View()))
+		return b.String()
 	}
+	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage)
 	return "Unclear which page we're on!"
 }
 
 func main() {
+	if len(os.Getenv("DEBUG")) > 0 {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+	}
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
 		fmt.Printf("could not start program: %s\n", err)
 		os.Exit(1)
@@ -226,6 +283,56 @@ type RegisterMsg struct {
 	Jwt       string
 	HexSalt   string
 	Username  string
+}
+
+type EntriesMsg struct {
+	Err       string
+	IsSuccess bool
+	Entries   []EntryItem
+}
+
+func entries(jwt string) tea.Msg {
+	req, err := http.NewRequest(http.MethodGet, baseUrl+"/api/entries", nil)
+	if err != nil {
+		log.Println("error creating list entries request ", err)
+		return EntriesMsg{Err: err.Error(), IsSuccess: false}
+	}
+	req.Header.Set("Authorization", "Bearer "+jwt)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("error with get entries request", err)
+		return EntriesMsg{Err: err.Error(), IsSuccess: false}
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("get entries response error ", err)
+		return EntriesMsg{Err: err.Error(), IsSuccess: false}
+	}
+	type entry struct {
+		content   string `json:"content"`
+		createdTs string `json:"createdTs"`
+	}
+	type listEntriesResp struct {
+		Entries []entry `json:"entries"`
+	}
+	var listEntriesResponse listEntriesResp
+	err = json.Unmarshal(body, &listEntriesResponse)
+	if err != nil {
+		log.Println("cannot unmarshal list entries response ", err)
+		return EntriesMsg{Err: err.Error(), IsSuccess: false}
+	}
+	entries := make([]EntryItem, 0)
+	for _, e := range listEntriesResponse.Entries {
+		t, err := time.Parse(time.DateTime, e.createdTs)
+		if err != nil {
+			log.Println("error parsing datetime", err)
+			continue
+		}
+		eItem := EntryItem{encryptedContent: e.content, createdTs: t}
+		entries = append(entries, eItem)
+	}
+	return EntriesMsg{Err: "", IsSuccess: true, Entries: entries}
 }
 
 func Register(username string, password string) tea.Msg {
