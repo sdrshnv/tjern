@@ -13,6 +13,7 @@ import (
 
 	// "github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -47,9 +48,14 @@ func (i EntryItem) Description() string { return i.encryptedContent }
 func (i EntryItem) FilterValue() string { return i.createdTs.String() }
 
 type homePageModel struct {
-	focusIdx int
-	list     list.Model
+	focusIdx  int
+	list      list.Model
 	listItems []list.Item
+}
+
+type entryPageModel struct {
+	textarea textarea.Model
+	err      error
 }
 
 type model struct {
@@ -64,18 +70,25 @@ type model struct {
 	onEntryPage   bool
 	username      string
 	homePage      homePageModel
+	entryPage     entryPageModel
 	// cursorMode cursor.Mode
 }
 
 func initialModel() model {
+	ta := textarea.New()
+	ta.Focus()
 	m := model{
 		loginInputs:   make([]textinput.Model, 2),
 		onLoginScreen: true,
 		onHomePage:    false,
 		onEntryPage:   false,
 		homePage: homePageModel{
-			listItems:  make([]list.Item, 0),
-			focusIdx: -1,
+			listItems: make([]list.Item, 0),
+			focusIdx:  -1,
+		},
+		entryPage: entryPageModel{
+			textarea: ta,
+			err:      nil,
 		},
 	}
 
@@ -190,6 +203,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyMsg:
 			switch msg.String() {
+			case tea.KeyEnter.String():
+				if m.homePage.focusIdx == -1 {
+					m.onHomePage = false
+					m.onEntryPage = true
+					m.onLoginScreen = false
+				}
+				return m, nil
 			case tea.KeyCtrlC.String(), tea.KeyEsc.String():
 				return m, tea.Quit
 			default:
@@ -198,6 +218,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			return m, nil
 		}
+	} else if m.onEntryPage {
+		var cmds []tea.Cmd
+		var cmd tea.Cmd
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.Type {
+			case tea.KeyEsc:
+				if m.entryPage.textarea.Focused() {
+					m.entryPage.textarea.Blur()
+				}
+			case tea.KeyCtrlC:
+				return m, tea.Quit
+			default:
+				if !m.entryPage.textarea.Focused() {
+					cmd = m.entryPage.textarea.Focus()
+					cmds = append(cmds, cmd)
+				}
+			}
+
+		// We handle errors just like any other message
+		default:
+			return m, nil
+			// case errMsg:
+			// 	m.err = msg
+			// 	return m, nil
+		}
+
+		m.entryPage.textarea, cmd = m.entryPage.textarea.Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	} else {
 		return m, nil
 	}
@@ -249,6 +299,9 @@ func (m model) View() string {
 		fmt.Fprintf(&b, "\n\n%s\n\n", *newEntryButton)
 		b.WriteString(docStyle.Render(m.homePage.list.View()))
 		return b.String()
+	}
+	if m.onEntryPage {
+		return m.entryPage.textarea.View()
 	}
 	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage)
 	return "Unclear which page we're on!"
