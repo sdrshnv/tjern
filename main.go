@@ -12,6 +12,8 @@ import (
 	"time"
 
 	// "github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -53,9 +55,32 @@ type homePageModel struct {
 	listItems []list.Item
 }
 
+type keyMap struct {
+	Up    key.Binding
+	Down  key.Binding
+	Left  key.Binding
+	Right key.Binding
+	Help  key.Binding
+	Back  key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Help, k.Back}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Left, k.Right}, // first column
+		{k.Help, k.Back},                // second column
+	}
+}
+
 type entryPageModel struct {
 	textarea textarea.Model
-	err      error
+	keys     keyMap
+	help     help.Model
+
+	err error
 }
 
 type model struct {
@@ -77,6 +102,32 @@ type model struct {
 func initialModel() model {
 	ta := textarea.New()
 	ta.Focus()
+	var keys = keyMap{
+		Up: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "move up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "move down"),
+		),
+		Left: key.NewBinding(
+			key.WithKeys("left", "h"),
+			key.WithHelp("←/h", "move left"),
+		),
+		Right: key.NewBinding(
+			key.WithKeys("right", "l"),
+			key.WithHelp("→/l", "move right"),
+		),
+		Help: key.NewBinding(
+			key.WithKeys("ctrl+h"),
+			key.WithHelp("ctrl+h", "toggle help"),
+		),
+		Back: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "save entry and go back"),
+		),
+	}
 	m := model{
 		loginInputs:   make([]textinput.Model, 2),
 		onLoginScreen: true,
@@ -88,6 +139,8 @@ func initialModel() model {
 		},
 		entryPage: entryPageModel{
 			textarea: ta,
+			keys:     keys,
+			help:     help.New(),
 			err:      nil,
 		},
 	}
@@ -223,6 +276,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
+			switch {
+			case key.Matches(msg, m.entryPage.keys.Help):
+				m.entryPage.help.ShowAll = !m.entryPage.help.ShowAll
+				return m, nil 
+			case key.Matches(msg, m.entryPage.keys.Back):
+				// 1. encrypt entry and send to server
+				// 2. clear content of entry page
+				m.onEntryPage = false
+				m.onHomePage = true
+				m.onLoginScreen = false
+			}
+
 			switch msg.Type {
 			case tea.KeyEsc:
 				if m.entryPage.textarea.Focused() {
@@ -301,7 +366,10 @@ func (m model) View() string {
 		return b.String()
 	}
 	if m.onEntryPage {
-		return m.entryPage.textarea.View()
+		var b strings.Builder
+		b.WriteString(m.entryPage.textarea.View())
+		fmt.Fprintf(&b, "\n%s", m.entryPage.help.View(m.entryPage.keys))
+		return b.String()
 	}
 	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage)
 	return "Unclear which page we're on!"
