@@ -210,6 +210,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case EntriesMsg:
 		if msg.IsSuccess {
+			m.homePage.listItems = nil
 			for _, e := range msg.Entries {
 				m.homePage.listItems = append(m.homePage.listItems, e)
 			}
@@ -393,12 +394,12 @@ func (m model) View() string {
 
 func main() {
 	if len(os.Getenv("DEBUG")) > 0 {
-	f, err := tea.LogToFile("debug.log", "debug")
-	if err != nil {
-		fmt.Println("fatal:", err)
-		os.Exit(1)
-	}
-	defer f.Close()
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
 	}
 	if _, err := tea.NewProgram(initialModel(), tea.WithAltScreen()).Run(); err != nil {
 		fmt.Printf("could not start program: %s\n", err)
