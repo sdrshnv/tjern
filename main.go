@@ -2,6 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +24,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 var (
@@ -38,6 +44,7 @@ var (
 	client                = &http.Client{
 		Timeout: 10 * time.Second,
 	}
+	timeFormat = time.RFC822
 )
 
 type EntryItem struct {
@@ -96,6 +103,7 @@ type model struct {
 	username      string
 	homePage      homePageModel
 	entryPage     entryPageModel
+	derivedKey    []byte
 	// cursorMode cursor.Mode
 }
 
@@ -173,31 +181,49 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case RegisterMsg:
+		if msg.IsSuccess {
+			m.onLoginScreen = false
+			m.onHomePage = true
+			m.jwt = msg.Jwt
+			m.hexSalt = msg.HexSalt
+			m.username = msg.Username
+			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
+			m.derivedKey = dk
+			return m, func() tea.Msg { return entries(m.jwt) }
+		} else {
+			m.registerErr = msg.Err
+		}
+	case LoginMsg:
+		if msg.IsSuccess {
+			m.onLoginScreen = false
+			m.onHomePage = true
+			m.jwt = msg.Jwt
+			m.hexSalt = msg.HexSalt
+			m.username = msg.Username
+			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
+			m.derivedKey = dk
+			return m, func() tea.Msg { return entries(m.jwt) }
+		} else {
+			m.loginErr = msg.Err
+		}
+	case EntriesMsg:
+		if msg.IsSuccess {
+			for _, e := range msg.Entries {
+				m.homePage.listItems = append(m.homePage.listItems, e)
+			}
+			m.homePage.list = list.New(m.homePage.listItems, list.NewDefaultDelegate(), 0, 0)
+			m.homePage.list.Title = "Entries"
+			return m, nil
+		} else {
+			log.Println("failed to get entries")
+			return m, nil
+		}
+	}
 	if m.onLoginScreen {
 
 		switch msg := msg.(type) {
-		case RegisterMsg:
-			if msg.IsSuccess {
-				m.onLoginScreen = false
-				m.onHomePage = true
-				m.jwt = msg.Jwt
-				m.hexSalt = msg.HexSalt
-				m.username = msg.Username
-				return m, func() tea.Msg { return entries(m.jwt) }
-			} else {
-				m.registerErr = msg.Err
-			}
-		case LoginMsg:
-			if msg.IsSuccess {
-				m.onLoginScreen = false
-				m.onHomePage = true
-				m.jwt = msg.Jwt
-				m.hexSalt = msg.HexSalt
-				m.username = msg.Username
-				return m, func() tea.Msg { return entries(m.jwt) }
-			} else {
-				m.loginErr = msg.Err
-			}
 		case tea.KeyMsg:
 			switch msg.String() {
 			case tea.KeyCtrlC.String(), tea.KeyEsc.String():
@@ -242,18 +268,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	} else if m.onHomePage {
 		switch msg := msg.(type) {
-		case EntriesMsg:
-			if msg.IsSuccess {
-				for _, e := range msg.Entries {
-					m.homePage.listItems = append(m.homePage.listItems, e)
-				}
-				m.homePage.list = list.New(m.homePage.listItems, list.NewDefaultDelegate(), 0, 0)
-				m.homePage.list.Title = "Entries"
-				return m, nil
-			} else {
-				log.Println("failed to get entries")
-				return m, nil
-			}
 		case tea.KeyMsg:
 			switch msg.String() {
 			case tea.KeyEnter.String():
@@ -279,13 +293,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, m.entryPage.keys.Help):
 				m.entryPage.help.ShowAll = !m.entryPage.help.ShowAll
-				return m, nil 
+				return m, nil
 			case key.Matches(msg, m.entryPage.keys.Back):
-				// 1. encrypt entry and send to server
-				// 2. clear content of entry page
+				plainContent := m.entryPage.textarea.Value()
 				m.onEntryPage = false
 				m.onHomePage = true
 				m.onLoginScreen = false
+				saveEntryCmd := func() tea.Msg { return saveEntry(plainContent, m.derivedKey, m.jwt) }
+				getEntriesCmd := func() tea.Msg { return entries(m.jwt) }
+				return m, tea.Sequence(saveEntryCmd, getEntriesCmd)
 			}
 
 			switch msg.Type {
@@ -377,12 +393,12 @@ func (m model) View() string {
 
 func main() {
 	if len(os.Getenv("DEBUG")) > 0 {
-		f, err := tea.LogToFile("debug.log", "debug")
-		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
-		}
-		defer f.Close()
+	f, err := tea.LogToFile("debug.log", "debug")
+	if err != nil {
+		fmt.Println("fatal:", err)
+		os.Exit(1)
+	}
+	defer f.Close()
 	}
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
 		fmt.Printf("could not start program: %s\n", err)
@@ -396,6 +412,7 @@ type LoginMsg struct {
 	Jwt       string
 	HexSalt   string
 	Username  string
+	Password  string
 }
 
 type RegisterMsg struct {
@@ -404,12 +421,62 @@ type RegisterMsg struct {
 	Jwt       string
 	HexSalt   string
 	Username  string
+	Password  string
 }
 
 type EntriesMsg struct {
 	Err       string
 	IsSuccess bool
 	Entries   []EntryItem
+}
+
+type SaveEntryMsg struct {
+	Err error
+}
+
+func saveEntry(plainContent string, derivedKey []byte, jwt string) tea.Msg {
+	block, err := aes.NewCipher(derivedKey)
+	if err != nil {
+		return SaveEntryMsg{Err: err}
+	}
+	cipherContent := make([]byte, aes.BlockSize+len(plainContent))
+	iv := cipherContent[:aes.BlockSize]
+	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
+		return SaveEntryMsg{Err: err}
+	}
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(cipherContent[aes.BlockSize:], []byte(plainContent))
+	cipherString := base64.RawStdEncoding.EncodeToString(cipherContent)
+	createdTs := time.Now().Format(timeFormat)
+	data := map[string]string{
+		"content":   cipherString,
+		"createdTs": createdTs,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return SaveEntryMsg{Err: err}
+	}
+	newEntryUrl := baseUrl + "/api/entries"
+	req, err := http.NewRequest(http.MethodPost, newEntryUrl, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Println("error constructing new entry request")
+		return SaveEntryMsg{Err: err}
+	}
+	req.Header.Set("Authorization", "Bearer "+jwt)
+	resp, err := client.Do(req)
+	if err != nil {
+		return SaveEntryMsg{Err: err}
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("error reading response body", err)
+		return SaveEntryMsg{Err: err}
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return SaveEntryMsg{Err: fmt.Errorf("error saving entry: %s", string(body[:]))}
+	}
+	return SaveEntryMsg{Err: nil}
 }
 
 func entries(jwt string) tea.Msg {
@@ -430,9 +497,13 @@ func entries(jwt string) tea.Msg {
 		log.Println("get entries response error ", err)
 		return EntriesMsg{Err: err.Error(), IsSuccess: false}
 	}
+	if resp.StatusCode != http.StatusOK {
+		log.Println("get entries error")
+		return EntriesMsg{Err: fmt.Sprintf("get entries error: %s", string(body[:])), IsSuccess: false}
+	}
 	type entry struct {
-		content   string `json:"content"`
-		createdTs string `json:"createdTs"`
+		Content   string `json:"content"`
+		CreatedTs string `json:"createdTs"`
 	}
 	type listEntriesResp struct {
 		Entries []entry `json:"entries"`
@@ -445,12 +516,12 @@ func entries(jwt string) tea.Msg {
 	}
 	entries := make([]EntryItem, 0)
 	for _, e := range listEntriesResponse.Entries {
-		t, err := time.Parse(time.DateTime, e.createdTs)
+		t, err := time.Parse(timeFormat, e.CreatedTs)
 		if err != nil {
 			log.Println("error parsing datetime", err)
 			continue
 		}
-		eItem := EntryItem{encryptedContent: e.content, createdTs: t}
+		eItem := EntryItem{encryptedContent: e.Content, createdTs: t}
 		entries = append(entries, eItem)
 	}
 	return EntriesMsg{Err: "", IsSuccess: true, Entries: entries}
@@ -488,7 +559,7 @@ func Register(username string, password string) tea.Msg {
 	if err != nil {
 		return RegisterMsg{Err: "Cannot unmarshal registration response", IsSuccess: false}
 	}
-	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt, HexSalt: registerResponse.HexSalt, Username: username}
+	return RegisterMsg{Err: "", IsSuccess: true, Jwt: registerResponse.Jwt, HexSalt: registerResponse.HexSalt, Username: username, Password: password}
 }
 
 func Login(username string, password string) tea.Msg {
@@ -523,5 +594,5 @@ func Login(username string, password string) tea.Msg {
 	if err != nil {
 		return LoginMsg{Err: "Cannot unmarshal login response", IsSuccess: false}
 	}
-	return LoginMsg{Err: "", IsSuccess: true, Jwt: loginResponse.Jwt, HexSalt: loginResponse.HexSalt, Username: username}
+	return LoginMsg{Err: "", IsSuccess: true, Jwt: loginResponse.Jwt, HexSalt: loginResponse.HexSalt, Username: username, Password: password}
 }
