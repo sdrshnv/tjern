@@ -55,9 +55,7 @@ func (i EntryItem) Description() string { return i.encryptedContent }
 func (i EntryItem) FilterValue() string { return i.createdTs.String() }
 
 type homePageModel struct {
-	focusIdx  int
-	list      list.Model
-	listItems []list.Item
+	list list.Model
 }
 
 type entryPageKeyMap struct {
@@ -101,6 +99,8 @@ type model struct {
 	hexSalt          string
 	onHomePage       bool
 	onEntryPage      bool
+	onReadEntryPage  bool
+	readEntryContent string
 	username         string
 	homePage         homePageModel
 	entryPage        entryPageModel
@@ -143,10 +143,10 @@ func initialModel() model {
 		onLoginScreen:    true,
 		onHomePage:       false,
 		onEntryPage:      false,
+		onReadEntryPage:  false,
+		readEntryContent: "",
 		homePage: homePageModel{
-			listItems: nil,
-			list:      list.New(make([]list.Item, 0), list.NewDefaultDelegate(), 0, 0),
-			focusIdx:  -1,
+			list: list.New(make([]list.Item, 0), list.NewDefaultDelegate(), 0, 0),
 		},
 		entryPage: entryPageModel{
 			textarea: ta,
@@ -157,8 +157,8 @@ func initialModel() model {
 	}
 
 	additionalListBindings := []key.Binding{
-		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "read selected entry")),
-		key.NewBinding(key.WithKeys("ctrl-n"), key.WithHelp("ctrl-n", "new entry")),
+		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
+		key.NewBinding(key.WithKeys("ctrl-n"), key.WithHelp("ctrl-n", "new")),
 	}
 
 	m.homePage.list.AdditionalShortHelpKeys = func() []key.Binding {
@@ -299,6 +299,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
+			case tea.KeyEnter.String():
+				m.onHomePage = false
+				m.onEntryPage = false
+				m.onLoginScreen = false
+				m.onReadEntryPage = true
+				item := m.homePage.list.SelectedItem()
+				entryItem, ok := item.(EntryItem)
+				if !ok {
+					log.Println("item is not of type EntryItem")
+					return m, nil
+				}
+				plainContent, err := decrypt(entryItem.encryptedContent, m.derivedKey)
+				if err != nil {
+					log.Println("error with decryption: ", err)
+					return m, nil
+				}
+				m.readEntryContent = plainContent
+				return m, nil
 			case tea.KeyCtrlN.String():
 					m.onHomePage = false
 					m.onEntryPage = true
@@ -357,6 +375,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.entryPage.textarea, cmd = m.entryPage.textarea.Update(msg)
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
+	} else if m.onReadEntryPage {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.onHomePage = true
+				m.onLoginScreen = false
+				m.onEntryPage = false
+				m.onReadEntryPage = false
+				m.readEntryContent = ""
+				return m, m.setListSize
+			}
+		}
+		return m, nil
 	} else {
 		return m, nil
 	}
@@ -408,6 +440,9 @@ func (m model) View() string {
 		fmt.Fprintf(&b, "\n%s", m.entryPage.help.View(m.entryPage.keys))
 		return b.String()
 	}
+	if m.onReadEntryPage {
+		return m.readEntryContent
+	}
 	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage)
 	return "Unclear which page we're on!"
 }
@@ -453,6 +488,26 @@ type EntriesMsg struct {
 
 type SaveEntryMsg struct {
 	Err error
+}
+
+func decrypt(cipherContent string, key []byte) (string, error) {
+	cipherText, err := base64.RawStdEncoding.DecodeString(cipherContent)
+	if err != nil {
+		log.Println("decode attempt content: ", cipherContent)
+		return "", fmt.Errorf("could not base64 decode: %v", err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("could not create new cipher: %v", err)
+	}
+	if len(cipherText) < aes.BlockSize {
+		return "", fmt.Errorf("invalid ciphertext block size")
+	}
+	iv := cipherText[:aes.BlockSize]
+	cipherText = cipherText[aes.BlockSize:]
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(cipherText, cipherText)
+	return string(cipherText), nil
 }
 
 func saveEntry(plainContent string, derivedKey []byte, jwt string) tea.Msg {
