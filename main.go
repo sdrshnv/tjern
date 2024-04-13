@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	// "github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -28,12 +27,11 @@ import (
 )
 
 var (
-	docStyle     = lipgloss.NewStyle().Margin(1, 2)
-	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	blurredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorStyle  = focusedStyle.Copy()
-	noStyle      = lipgloss.NewStyle()
-	// helpStyle     = blurredStyle.Copy()
+	docStyle              = lipgloss.NewStyle().Margin(1, 2)
+	focusedStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	blurredStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	cursorStyle           = focusedStyle.Copy()
+	noStyle               = lipgloss.NewStyle()
 	focusedLoginButton    = focusedStyle.Copy().Render("[ Login ]")
 	blurredLoginButton    = blurredStyle.Copy().Render("[ Login ]")
 	focusedRegisterButton = focusedStyle.Copy().Render("[ Register ]")
@@ -108,7 +106,6 @@ type model struct {
 	homePage         homePageModel
 	entryPage        entryPageModel
 	derivedKey       []byte
-	// cursorMode cursor.Mode
 }
 
 func initialModel() model {
