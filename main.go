@@ -300,6 +300,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onEntryPage = false
 				m.onHomePage = true
 				m.onLoginScreen = false
+				m.entryPage.textarea.Reset()
+				if len(strings.TrimSpace(m.entryPage.textarea.Value())) == 0 {
+					return m, nil
+				}
 				saveEntryCmd := func() tea.Msg { return saveEntry(plainContent, m.derivedKey, m.jwt) }
 				getEntriesCmd := func() tea.Msg { return entries(m.jwt) }
 				return m, tea.Sequence(saveEntryCmd, getEntriesCmd)
