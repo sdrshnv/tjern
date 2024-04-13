@@ -87,7 +87,6 @@ type entryPageModel struct {
 }
 
 type model struct {
-	recordWindowSize bool
 	windowHeight     int
 	windowWidth      int
 	focusIdx         int
@@ -138,7 +137,6 @@ func initialModel() model {
 		),
 	}
 	m := model{
-		recordWindowSize: true,
 		loginInputs:      make([]textinput.Model, 2),
 		onLoginScreen:    true,
 		onHomePage:       false,
@@ -203,11 +201,8 @@ func (m model) setListSize() tea.Msg {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		if m.recordWindowSize {
 			m.windowHeight = msg.Height
 			m.windowWidth = msg.Width
-			m.recordWindowSize = false
-		}
 		h, v := docStyle.GetFrameSize()
 		m.homePage.list.SetSize(msg.Width-h, msg.Height-v)
 	case RegisterMsg:
