@@ -204,6 +204,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.windowHeight = msg.Height
 			m.windowWidth = msg.Width
 		h, v := docStyle.GetFrameSize()
+		m.entryPage.textarea.SetHeight(msg.Height - strings.Count(m.entryPage.help.View(m.entryPage.keys), "\n") - 1)
+		m.entryPage.textarea.SetWidth(msg.Width)
+		m.entryPage.help.Width = msg.Width
 		m.homePage.list.SetSize(msg.Width-h, msg.Height-v)
 	case RegisterMsg:
 		if msg.IsSuccess {
