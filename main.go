@@ -473,17 +473,18 @@ func main() {
 	if err != nil {
 		fmt.Println("error getting config: ", err)
 		os.Exit(1)
-	} 
+	}
 	baseUrl = config.BaseUrl
 
-	f, err := tea.LogToFile("debug.log", "debug")
-	if err != nil {
-		fmt.Println("fatal:", err)
-		os.Exit(1)
+	if len(os.Getenv("DEBUG")) > 0 {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
 	}
-	defer f.Close()
-	// if len(os.Getenv("DEBUG")) > 0 {
-	// }
+
 	if _, err := tea.NewProgram(initialModel(), tea.WithAltScreen()).Run(); err != nil {
 		fmt.Printf("could not start program: %s\n", err)
 		os.Exit(1)
