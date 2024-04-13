@@ -535,15 +535,15 @@ func entries(jwt string) tea.Msg {
 		log.Println("cannot unmarshal list entries response ", err)
 		return EntriesMsg{Err: err.Error(), IsSuccess: false}
 	}
-	entries := make([]EntryItem, 0)
-	for _, e := range listEntriesResponse.Entries {
+	entries := make([]EntryItem, len(listEntriesResponse.Entries))
+	for i, e := range listEntriesResponse.Entries {
 		t, err := time.Parse(timeFormat, e.CreatedTs)
 		if err != nil {
 			log.Println("error parsing datetime", err)
 			continue
 		}
 		eItem := EntryItem{encryptedContent: e.Content, createdTs: t}
-		entries = append(entries, eItem)
+		entries[i] = eItem
 	}
 	return EntriesMsg{Err: "", IsSuccess: true, Entries: entries}
 }
