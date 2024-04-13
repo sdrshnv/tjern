@@ -91,19 +91,22 @@ type entryPageModel struct {
 }
 
 type model struct {
-	focusIdx      int
-	loginInputs   []textinput.Model
-	loginErr      string
-	registerErr   string
-	onLoginScreen bool
-	jwt           string
-	hexSalt       string
-	onHomePage    bool
-	onEntryPage   bool
-	username      string
-	homePage      homePageModel
-	entryPage     entryPageModel
-	derivedKey    []byte
+	recordWindowSize bool
+	windowHeight     int
+	windowWidth      int
+	focusIdx         int
+	loginInputs      []textinput.Model
+	loginErr         string
+	registerErr      string
+	onLoginScreen    bool
+	jwt              string
+	hexSalt          string
+	onHomePage       bool
+	onEntryPage      bool
+	username         string
+	homePage         homePageModel
+	entryPage        entryPageModel
+	derivedKey       []byte
 	// cursorMode cursor.Mode
 }
 
@@ -137,12 +140,14 @@ func initialModel() model {
 		),
 	}
 	m := model{
-		loginInputs:   make([]textinput.Model, 2),
-		onLoginScreen: true,
-		onHomePage:    false,
-		onEntryPage:   false,
+		recordWindowSize: true,
+		loginInputs:      make([]textinput.Model, 2),
+		onLoginScreen:    true,
+		onHomePage:       false,
+		onEntryPage:      false,
 		homePage: homePageModel{
 			listItems: nil,
+			list:      list.New(make([]list.Item, 0), list.NewDefaultDelegate(), 0, 0),
 			focusIdx:  -1,
 		},
 		entryPage: entryPageModel{
@@ -182,6 +187,14 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		if m.recordWindowSize {
+			m.windowHeight = msg.Height
+			m.windowWidth = msg.Width
+			m.recordWindowSize = false
+		}
+		h, v := docStyle.GetFrameSize()
+		m.homePage.list.SetSize(msg.Width-h, msg.Height-v)
 	case RegisterMsg:
 		if msg.IsSuccess {
 			m.onLoginScreen = false
@@ -191,7 +204,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.username = msg.Username
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
 			m.derivedKey = dk
-			return m, func() tea.Msg { return entries(m.jwt) }
+			entriesCmd := func() tea.Msg { return entries(m.jwt) }
+			windowCmd := func() tea.Msg { return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth} }
+			return m, tea.Sequence(entriesCmd, windowCmd)
 		} else {
 			m.registerErr = msg.Err
 		}
@@ -204,7 +219,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.username = msg.Username
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
 			m.derivedKey = dk
-			return m, func() tea.Msg { return entries(m.jwt) }
+			entriesCmd := func() tea.Msg { return entries(m.jwt) }
+			windowCmd := func() tea.Msg { return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth} }
+			return m, tea.Sequence(entriesCmd, windowCmd)
 		} else {
 			m.loginErr = msg.Err
 		}
@@ -280,12 +297,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case tea.KeyCtrlC.String(), tea.KeyEsc.String():
 				return m, tea.Quit
-			default:
-				return m, nil
 			}
-		default:
-			return m, nil
 		}
+		var cmd tea.Cmd
+		m.homePage.list, cmd = m.homePage.list.Update(msg)
+		return m, cmd
 	} else if m.onEntryPage {
 		var cmds []tea.Cmd
 		var cmd tea.Cmd
