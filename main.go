@@ -156,6 +156,19 @@ func initialModel() model {
 		},
 	}
 
+	additionalListBindings := []key.Binding{
+		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "read selected entry")),
+		key.NewBinding(key.WithKeys("ctrl-n"), key.WithHelp("ctrl-n", "new entry")),
+	}
+
+	m.homePage.list.AdditionalShortHelpKeys = func() []key.Binding {
+		return additionalListBindings
+	}
+
+	m.homePage.list.AdditionalFullHelpKeys = func() []key.Binding {
+		return additionalListBindings
+	}
+
 	var t textinput.Model
 
 	for i := range m.loginInputs {
