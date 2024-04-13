@@ -185,6 +185,10 @@ func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
+func (m model) setListSize() tea.Msg {
+	return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth}
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -205,8 +209,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
 			m.derivedKey = dk
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
-			windowCmd := func() tea.Msg { return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth} }
-			return m, tea.Sequence(entriesCmd, windowCmd)
+			return m, tea.Sequence(entriesCmd, m.setListSize)
 		} else {
 			m.registerErr = msg.Err
 		}
@@ -220,8 +223,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
 			m.derivedKey = dk
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
-			windowCmd := func() tea.Msg { return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth} }
-			return m, tea.Sequence(entriesCmd, windowCmd)
+			return m, tea.Sequence(entriesCmd, m.setListSize)
 		} else {
 			m.loginErr = msg.Err
 		}
@@ -288,14 +290,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
-			case tea.KeyEnter.String():
-				if m.homePage.focusIdx == -1 {
+			case tea.KeyCtrlN.String():
 					m.onHomePage = false
 					m.onEntryPage = true
 					m.onLoginScreen = false
-				}
 				return m, nil
-			case tea.KeyCtrlC.String(), tea.KeyEsc.String():
+			case tea.KeyCtrlC.String():
 				return m, tea.Quit
 			}
 		}
@@ -317,12 +317,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onHomePage = true
 				m.onLoginScreen = false
 				m.entryPage.textarea.Reset()
-				if len(strings.TrimSpace(m.entryPage.textarea.Value())) == 0 {
+				if len(strings.TrimSpace(plainContent)) == 0 {
+					log.Println("empty entry won't be saved")
 					return m, nil
 				}
 				saveEntryCmd := func() tea.Msg { return saveEntry(plainContent, m.derivedKey, m.jwt) }
 				getEntriesCmd := func() tea.Msg { return entries(m.jwt) }
-				return m, tea.Sequence(saveEntryCmd, getEntriesCmd)
+				return m, tea.Sequence(saveEntryCmd, getEntriesCmd, m.setListSize)
 			}
 
 			switch msg.Type {
@@ -342,9 +343,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// We handle errors just like any other message
 		default:
 			return m, nil
-			// case errMsg:
-			// 	m.err = msg
-			// 	return m, nil
 		}
 
 		m.entryPage.textarea, cmd = m.entryPage.textarea.Update(msg)
@@ -393,14 +391,7 @@ func (m model) View() string {
 		return b.String()
 	}
 	if m.onHomePage {
-		var b strings.Builder
-		newEntryButton := &blurredNewEntryButton
-		if m.homePage.focusIdx == -1 {
-			newEntryButton = &focusedNewEntryButton
-		}
-		fmt.Fprintf(&b, "\n\n%s\n\n", *newEntryButton)
-		b.WriteString(docStyle.Render(m.homePage.list.View()))
-		return b.String()
+		return docStyle.Render(m.homePage.list.View())
 	}
 	if m.onEntryPage {
 		var b strings.Builder
