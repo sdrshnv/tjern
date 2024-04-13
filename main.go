@@ -142,7 +142,7 @@ func initialModel() model {
 		onHomePage:    false,
 		onEntryPage:   false,
 		homePage: homePageModel{
-			listItems: make([]list.Item, 0),
+			listItems: nil,
 			focusIdx:  -1,
 		},
 		entryPage: entryPageModel{
@@ -210,9 +210,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case EntriesMsg:
 		if msg.IsSuccess {
-			m.homePage.listItems = nil
-			for _, e := range msg.Entries {
-				m.homePage.listItems = append(m.homePage.listItems, e)
+			m.homePage.listItems = make([]list.Item, len(msg.Entries)) 
+			for i, e := range msg.Entries {
+				m.homePage.listItems[i] = e
 			}
 			m.homePage.list = list.New(m.homePage.listItems, list.NewDefaultDelegate(), 0, 0)
 			m.homePage.list.Title = "Entries"
