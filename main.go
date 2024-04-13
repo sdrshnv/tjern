@@ -38,12 +38,16 @@ var (
 	blurredLoginButton    = blurredStyle.Copy().Render("[ Login ]")
 	focusedRegisterButton = focusedStyle.Copy().Render("[ Register ]")
 	blurredRegisterButton = blurredStyle.Copy().Render("[ Register ]")
-	baseUrl               = "http://localhost:8787"
+	baseUrl               string
 	client                = &http.Client{
 		Timeout: 10 * time.Second,
 	}
 	timeFormat = time.RFC822
 )
+
+type Config struct {
+	BaseUrl string `json:"baseUrl"`
+}
 
 type EntryItem struct {
 	encryptedContent string
@@ -203,8 +207,8 @@ func (m model) setListSize() tea.Msg {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-			m.windowHeight = msg.Height
-			m.windowWidth = msg.Width
+		m.windowHeight = msg.Height
+		m.windowWidth = msg.Width
 		h, v := docStyle.GetFrameSize()
 		m.entryPage.textarea.SetHeight(msg.Height - strings.Count(m.entryPage.help.View(m.entryPage.keys), "\n") - 1)
 		m.entryPage.textarea.SetWidth(msg.Width)
@@ -318,9 +322,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.readEntryContent = plainContent
 				return m, nil
 			case tea.KeyCtrlN.String():
-					m.onHomePage = false
-					m.onEntryPage = true
-					m.onLoginScreen = false
+				m.onHomePage = false
+				m.onEntryPage = true
+				m.onLoginScreen = false
 				return m, nil
 			case tea.KeyCtrlC.String():
 				return m, tea.Quit
@@ -447,15 +451,39 @@ func (m model) View() string {
 	return "Unclear which page we're on!"
 }
 
-func main() {
-	if len(os.Getenv("DEBUG")) > 0 {
-		f, err := tea.LogToFile("debug.log", "debug")
-		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
-		}
-		defer f.Close()
+func config() (*Config, error) {
+	file, err := os.Open("config.json")
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return nil, err
 	}
+	defer file.Close()
+	var config Config
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		fmt.Println("Error decoding config: ", err)
+		return nil, err
+	}
+	return &config, nil
+}
+
+func main() {
+	config, err := config()
+	if err != nil {
+		fmt.Println("error getting config: ", err)
+		os.Exit(1)
+	} 
+	baseUrl = config.BaseUrl
+
+	f, err := tea.LogToFile("debug.log", "debug")
+	if err != nil {
+		fmt.Println("fatal:", err)
+		os.Exit(1)
+	}
+	defer f.Close()
+	// if len(os.Getenv("DEBUG")) > 0 {
+	// }
 	if _, err := tea.NewProgram(initialModel(), tea.WithAltScreen()).Run(); err != nil {
 		fmt.Printf("could not start program: %s\n", err)
 		os.Exit(1)
@@ -552,6 +580,7 @@ func saveEntry(plainContent string, derivedKey []byte, jwt string) tea.Msg {
 	if resp.StatusCode != http.StatusCreated {
 		return SaveEntryMsg{Err: fmt.Errorf("error saving entry: %s", string(body[:]))}
 	}
+	log.Println("saving entry...")
 	return SaveEntryMsg{Err: nil}
 }
 
