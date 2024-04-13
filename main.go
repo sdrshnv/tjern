@@ -167,6 +167,8 @@ func initialModel() model {
 		return additionalListBindings
 	}
 
+	m.homePage.list.Title = "Entries"
+
 	var t textinput.Model
 
 	for i := range m.loginInputs {
