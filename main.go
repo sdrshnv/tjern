@@ -38,8 +38,6 @@ var (
 	blurredLoginButton    = blurredStyle.Copy().Render("[ Login ]")
 	focusedRegisterButton = focusedStyle.Copy().Render("[ Register ]")
 	blurredRegisterButton = blurredStyle.Copy().Render("[ Register ]")
-	focusedNewEntryButton = focusedStyle.Copy().Render("[ New Entry ]")
-	blurredNewEntryButton = blurredStyle.Copy().Render("[ New Entry ]")
 	baseUrl               = "http://localhost:8787"
 	client                = &http.Client{
 		Timeout: 10 * time.Second,
@@ -62,7 +60,7 @@ type homePageModel struct {
 	listItems []list.Item
 }
 
-type keyMap struct {
+type entryPageKeyMap struct {
 	Up    key.Binding
 	Down  key.Binding
 	Left  key.Binding
@@ -71,11 +69,11 @@ type keyMap struct {
 	Back  key.Binding
 }
 
-func (k keyMap) ShortHelp() []key.Binding {
+func (k entryPageKeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Help, k.Back}
 }
 
-func (k keyMap) FullHelp() [][]key.Binding {
+func (k entryPageKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right}, // first column
 		{k.Help, k.Back},                // second column
@@ -84,7 +82,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 type entryPageModel struct {
 	textarea textarea.Model
-	keys     keyMap
+	keys     entryPageKeyMap
 	help     help.Model
 
 	err error
@@ -113,7 +111,7 @@ type model struct {
 func initialModel() model {
 	ta := textarea.New()
 	ta.Focus()
-	var keys = keyMap{
+	var keys = entryPageKeyMap{
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
 			key.WithHelp("↑/k", "move up"),
