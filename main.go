@@ -240,13 +240,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case EntriesMsg:
 		if msg.IsSuccess {
-			m.homePage.listItems = make([]list.Item, len(msg.Entries)) 
+			items := make([]list.Item, len(msg.Entries))
 			for i, e := range msg.Entries {
-				m.homePage.listItems[i] = e
+				items[i] = e
 			}
-			m.homePage.list = list.New(m.homePage.listItems, list.NewDefaultDelegate(), 0, 0)
-			m.homePage.list.Title = "Entries"
-			return m, nil
+			return m, tea.Batch(m.homePage.list.SetItems(items), m.setListSize)
 		} else {
 			log.Println("failed to get entries")
 			return m, nil
