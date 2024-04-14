@@ -382,7 +382,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		// We handle errors just like any other message
 		default:
 			return m, nil
 		}
