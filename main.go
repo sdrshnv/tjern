@@ -54,7 +54,7 @@ type EntryItem struct {
 
 func (i EntryItem) Title() string       { return i.createdTs.Format(timeFormat) }
 func (i EntryItem) Description() string { return i.encryptedContent }
-func (i EntryItem) FilterValue() string { return i.createdTs.String() }
+func (i EntryItem) FilterValue() string { return i.createdTs.Format(timeFormat) }
 
 type homePageModel struct {
 	list list.Model
