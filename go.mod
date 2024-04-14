@@ -1,4 +1,4 @@
-module github.com/tjern
+module github.com/sudarshanvankudre/tjern
 
 go 1.22.0
 
