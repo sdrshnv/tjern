@@ -7,8 +7,7 @@ A happy little journaling app.
 
 ## Installation
 ### Go from Source
-1. Clone this repo.
-2. `cd tjern`
-3. `go run main.go`
+1. `cd tjern`
+2. `go run main.go`
 ### Homebrew
 *Coming soon!*
