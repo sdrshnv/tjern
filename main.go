@@ -349,9 +349,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					log.Println("empty entry won't be saved")
 					return m, nil
 				}
-				saveEntryCmd := func() tea.Msg { return saveEntry(plainContent, m.derivedKey, m.jwt) }
-				getEntriesCmd := func() tea.Msg { return entries(m.jwt) }
-				return m, tea.Sequence(saveEntryCmd, getEntriesCmd, m.setListSize)
+				cipherContent, err := encrypt(plainContent, m.derivedKey)
+				if err != nil {
+					log.Println("error encrypting content: ", err)
+					return m, func() tea.Msg { return SaveEntryMsg{Err: err} }
+				}
+				createdTs := time.Now()
+				saveEntryCmd := func() tea.Msg { return saveEntry(cipherContent, m.jwt, createdTs.Format(timeFormat)) }
+				updateListCmd := m.homePage.list.InsertItem(0, EntryItem{encryptedContent: cipherContent, createdTs: createdTs})
+				return m, tea.Batch(saveEntryCmd, updateListCmd, m.setListSize)
 			}
 
 			switch msg.Type {
@@ -444,7 +450,7 @@ func (m model) View() string {
 	if m.onReadEntryPage {
 		return m.readEntryContent
 	}
-	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage)
+	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage, " on read entry page: ", m.onReadEntryPage)
 	return "Unclear which page we're on!"
 }
 
@@ -536,22 +542,24 @@ func decrypt(cipherContent string, key []byte) (string, error) {
 	return string(cipherText), nil
 }
 
-func saveEntry(plainContent string, derivedKey []byte, jwt string) tea.Msg {
-	block, err := aes.NewCipher(derivedKey)
+func encrypt(plainContent string, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return SaveEntryMsg{Err: err}
+		return "", err
 	}
 	cipherContent := make([]byte, aes.BlockSize+len(plainContent))
 	iv := cipherContent[:aes.BlockSize]
 	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
-		return SaveEntryMsg{Err: err}
+		return "", err
 	}
 	stream := cipher.NewCFBEncrypter(block, iv)
 	stream.XORKeyStream(cipherContent[aes.BlockSize:], []byte(plainContent))
-	cipherString := base64.RawStdEncoding.EncodeToString(cipherContent)
-	createdTs := time.Now().Format(timeFormat)
+	return base64.RawStdEncoding.EncodeToString(cipherContent), nil
+}
+
+func saveEntry(content string, jwt string, createdTs string) tea.Msg {
 	data := map[string]string{
-		"content":   cipherString,
+		"content":   content,
 		"createdTs": createdTs,
 	}
 	jsonData, err := json.Marshal(data)
