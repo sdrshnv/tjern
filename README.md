@@ -1,12 +1,5 @@
-# Tjern
+# tjern
+tjern is a minimal command line journaling application. It encrypts entries on the client so only you can read your content.
 
-## Features
-- End-to-end encrypted
-- CLI only
-
-## Installation
-### Go from Source
-1. `cd tjern`
-2. `go run main.go`
-### Homebrew
-*Coming soon!*
+## Install
+*coming soon*
