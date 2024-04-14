@@ -35,7 +35,7 @@ var (
 	blurredLoginButton    = blurredStyle.Copy().Render("[ Login ]")
 	focusedRegisterButton = focusedStyle.Copy().Render("[ Register ]")
 	blurredRegisterButton = blurredStyle.Copy().Render("[ Register ]")
-	baseUrl               string
+	baseUrl               = "http://localhost:8787"
 	client                = &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -444,7 +444,6 @@ func (m model) View() string {
 }
 
 func main() {
-	baseUrl = "http://localhost:8787"
 
 	if len(os.Getenv("DEBUG")) > 0 {
 		f, err := tea.LogToFile("debug.log", "debug")
