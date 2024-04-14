@@ -1,5 +1,4 @@
 # Tjern
-A happy little journaling app. 
 
 ## Features
 - End-to-end encrypted
