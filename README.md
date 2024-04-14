@@ -1,2 +1,2 @@
-# tjern
-Client side encrypted CLI journal
+# Tjern
+- E2E Encrypted
