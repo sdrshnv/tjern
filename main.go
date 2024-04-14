@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -247,7 +246,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(m.homePage.list.SetItems(items), m.setListSize)
 		} else {
-			log.Println("failed to get entries")
 			return m, nil
 		}
 	}
@@ -308,12 +306,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				item := m.homePage.list.SelectedItem()
 				entryItem, ok := item.(EntryItem)
 				if !ok {
-					log.Println("item is not of type EntryItem")
 					return m, nil
 				}
 				plainContent, err := decrypt(entryItem.encryptedContent, m.derivedKey)
 				if err != nil {
-					log.Println("error with decryption: ", err)
 					return m, nil
 				}
 				m.readEntryContent = plainContent
@@ -346,12 +342,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onLoginScreen = false
 				m.entryPage.textarea.Reset()
 				if len(strings.TrimSpace(plainContent)) == 0 {
-					log.Println("empty entry won't be saved")
 					return m, nil
 				}
 				cipherContent, err := encrypt(plainContent, m.derivedKey)
 				if err != nil {
-					log.Println("error encrypting content: ", err)
 					return m, func() tea.Msg { return SaveEntryMsg{Err: err} }
 				}
 				createdTs := time.Now()
@@ -446,34 +440,11 @@ func (m model) View() string {
 	if m.onReadEntryPage {
 		return m.readEntryContent
 	}
-	log.Println("on login screen: ", m.onLoginScreen, " on home page: ", m.onHomePage, " on entry page: ", m.onEntryPage, " on read entry page: ", m.onReadEntryPage)
 	return "Unclear which page we're on!"
 }
 
-func config() (*Config, error) {
-	file, err := os.Open("config.json")
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return nil, err
-	}
-	defer file.Close()
-	var config Config
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&config)
-	if err != nil {
-		fmt.Println("Error decoding config: ", err)
-		return nil, err
-	}
-	return &config, nil
-}
-
 func main() {
-	config, err := config()
-	if err != nil {
-		fmt.Println("error getting config: ", err)
-		os.Exit(1)
-	}
-	baseUrl = config.BaseUrl
+	baseUrl = "http://localhost:8787"
 
 	if len(os.Getenv("DEBUG")) > 0 {
 		f, err := tea.LogToFile("debug.log", "debug")
@@ -521,7 +492,6 @@ type SaveEntryMsg struct {
 func decrypt(cipherContent string, key []byte) (string, error) {
 	cipherText, err := base64.RawStdEncoding.DecodeString(cipherContent)
 	if err != nil {
-		log.Println("decode attempt content: ", cipherContent)
 		return "", fmt.Errorf("could not base64 decode: %v", err)
 	}
 	block, err := aes.NewCipher(key)
@@ -565,7 +535,6 @@ func saveEntry(content string, jwt string, createdTs string) tea.Msg {
 	newEntryUrl := baseUrl + "/api/entries"
 	req, err := http.NewRequest(http.MethodPost, newEntryUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Println("error constructing new entry request")
 		return SaveEntryMsg{Err: err}
 	}
 	req.Header.Set("Authorization", "Bearer "+jwt)
@@ -576,36 +545,30 @@ func saveEntry(content string, jwt string, createdTs string) tea.Msg {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println("error reading response body", err)
 		return SaveEntryMsg{Err: err}
 	}
 	if resp.StatusCode != http.StatusCreated {
 		return SaveEntryMsg{Err: fmt.Errorf("error saving entry: %s", string(body[:]))}
 	}
-	log.Println("saving entry...")
 	return SaveEntryMsg{Err: nil}
 }
 
 func entries(jwt string) tea.Msg {
 	req, err := http.NewRequest(http.MethodGet, baseUrl+"/api/entries", nil)
 	if err != nil {
-		log.Println("error creating list entries request ", err)
 		return EntriesMsg{Err: err.Error(), IsSuccess: false}
 	}
 	req.Header.Set("Authorization", "Bearer "+jwt)
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("error with get entries request", err)
 		return EntriesMsg{Err: err.Error(), IsSuccess: false}
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println("get entries response error ", err)
 		return EntriesMsg{Err: err.Error(), IsSuccess: false}
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Println("get entries error")
 		return EntriesMsg{Err: fmt.Sprintf("get entries error: %s", string(body[:])), IsSuccess: false}
 	}
 	type entry struct {
@@ -618,14 +581,12 @@ func entries(jwt string) tea.Msg {
 	var listEntriesResponse listEntriesResp
 	err = json.Unmarshal(body, &listEntriesResponse)
 	if err != nil {
-		log.Println("cannot unmarshal list entries response ", err)
 		return EntriesMsg{Err: err.Error(), IsSuccess: false}
 	}
 	entries := make([]EntryItem, len(listEntriesResponse.Entries))
 	for i, e := range listEntriesResponse.Entries {
 		t, err := time.Parse(timeFormat, e.CreatedTs)
 		if err != nil {
-			log.Println("error parsing datetime", err)
 			continue
 		}
 		eItem := EntryItem{encryptedContent: e.Content, createdTs: t}
