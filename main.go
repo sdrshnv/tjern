@@ -45,10 +45,6 @@ var (
 
 const errTimeout = time.Second * 2
 
-type Config struct {
-	BaseUrl string `json:"baseUrl"`
-}
-
 type EntryItem struct {
 	encryptedContent string
 	createdTs        time.Time
