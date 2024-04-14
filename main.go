@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/crypto/pbkdf2"
@@ -42,6 +43,8 @@ var (
 	timeFormat = time.RFC822
 )
 
+const errTimeout = time.Second * 2
+
 type Config struct {
 	BaseUrl string `json:"baseUrl"`
 }
@@ -57,6 +60,13 @@ func (i EntryItem) FilterValue() string { return i.createdTs.Format(timeFormat) 
 
 type homePageModel struct {
 	list list.Model
+}
+
+type loginPageModel struct {
+	errTimer    timer.Model
+	focusIdx    int
+	loginInputs []textinput.Model
+	errMessage  string
 }
 
 type entryPageKeyMap struct {
@@ -90,10 +100,6 @@ type entryPageModel struct {
 type model struct {
 	windowHeight     int
 	windowWidth      int
-	focusIdx         int
-	loginInputs      []textinput.Model
-	loginErr         string
-	registerErr      string
 	onLoginScreen    bool
 	jwt              string
 	hexSalt          string
@@ -102,6 +108,7 @@ type model struct {
 	onReadEntryPage  bool
 	readEntryContent string
 	username         string
+	loginPage        loginPageModel
 	homePage         homePageModel
 	entryPage        entryPageModel
 	derivedKey       []byte
@@ -137,12 +144,15 @@ func initialModel() model {
 		),
 	}
 	m := model{
-		loginInputs:      make([]textinput.Model, 2),
 		onLoginScreen:    true,
 		onHomePage:       false,
 		onEntryPage:      false,
 		onReadEntryPage:  false,
 		readEntryContent: "",
+		loginPage: loginPageModel{
+			loginInputs: make([]textinput.Model, 2),
+			errTimer:    timer.New(errTimeout),
+		},
 		homePage: homePageModel{
 			list: list.New(make([]list.Item, 0), list.NewDefaultDelegate(), 0, 0),
 		},
@@ -171,7 +181,7 @@ func initialModel() model {
 
 	var t textinput.Model
 
-	for i := range m.loginInputs {
+	for i := range m.loginPage.loginInputs {
 		t = textinput.New()
 		t.Cursor.Style = cursorStyle
 		t.CharLimit = 128
@@ -187,7 +197,7 @@ func initialModel() model {
 			t.EchoMode = textinput.EchoPassword
 			t.EchoCharacter = '•'
 		}
-		m.loginInputs[i] = t
+		m.loginPage.loginInputs[i] = t
 	}
 	return m
 }
@@ -202,6 +212,14 @@ func (m model) setListSize() tea.Msg {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case timer.TickMsg:
+		var cmd tea.Cmd
+		m.loginPage.errTimer, cmd = m.loginPage.errTimer.Update(msg)
+		return m, cmd
+	case timer.TimeoutMsg:
+		m.loginPage.errTimer = timer.New(errTimeout)
+		m.loginPage.errMessage = ""
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.windowHeight = msg.Height
 		m.windowWidth = msg.Width
@@ -222,7 +240,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
 			return m, tea.Sequence(entriesCmd, m.setListSize)
 		} else {
-			m.registerErr = msg.Err
+			m.loginPage.errMessage = msg.Err
+			return m, m.loginPage.errTimer.Init()
 		}
 	case LoginMsg:
 		if msg.IsSuccess {
@@ -236,7 +255,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
 			return m, tea.Sequence(entriesCmd, m.setListSize)
 		} else {
-			m.loginErr = msg.Err
+			m.loginPage.errMessage = msg.Err
+			return m, m.loginPage.errTimer.Init()
 		}
 	case EntriesMsg:
 		if msg.IsSuccess {
@@ -258,34 +278,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case tea.KeyTab.String(), tea.KeyShiftTab.String(), tea.KeyEnter.String(), tea.KeyUp.String(), tea.KeyDown.String():
 				s := msg.String()
-				if s == tea.KeyEnter.String() && m.focusIdx == len(m.loginInputs) {
-					return m, func() tea.Msg { return Login(m.loginInputs[0].Value(), m.loginInputs[1].Value()) }
+				if s == tea.KeyEnter.String() && m.loginPage.focusIdx == len(m.loginPage.loginInputs) {
+					return m, func() tea.Msg { return Login(m.loginPage.loginInputs[0].Value(), m.loginPage.loginInputs[1].Value()) }
 				}
-				if s == tea.KeyEnter.String() && m.focusIdx == len(m.loginInputs)+1 {
-					return m, func() tea.Msg { return Register(m.loginInputs[0].Value(), m.loginInputs[1].Value()) }
+				if s == tea.KeyEnter.String() && m.loginPage.focusIdx == len(m.loginPage.loginInputs)+1 {
+					return m, func() tea.Msg {
+						return Register(m.loginPage.loginInputs[0].Value(), m.loginPage.loginInputs[1].Value())
+					}
 				}
 				if s == tea.KeyUp.String() || s == tea.KeyShiftTab.String() {
-					m.focusIdx--
+					m.loginPage.focusIdx--
 				} else {
-					m.focusIdx++
+					m.loginPage.focusIdx++
 				}
-				if m.focusIdx > len(m.loginInputs)+1 {
-					m.focusIdx = 0
-				} else if m.focusIdx < 0 {
-					m.focusIdx = len(m.loginInputs) - 1
+				if m.loginPage.focusIdx > len(m.loginPage.loginInputs)+1 {
+					m.loginPage.focusIdx = 0
+				} else if m.loginPage.focusIdx < 0 {
+					m.loginPage.focusIdx = len(m.loginPage.loginInputs) - 1
 				}
 
-				cmds := make([]tea.Cmd, len(m.loginInputs))
-				for i := 0; i < len(m.loginInputs); i++ {
-					if i == m.focusIdx {
-						cmds[i] = m.loginInputs[i].Focus()
-						m.loginInputs[i].PromptStyle = focusedStyle
-						m.loginInputs[i].TextStyle = focusedStyle
+				cmds := make([]tea.Cmd, len(m.loginPage.loginInputs))
+				for i := 0; i < len(m.loginPage.loginInputs); i++ {
+					if i == m.loginPage.focusIdx {
+						cmds[i] = m.loginPage.loginInputs[i].Focus()
+						m.loginPage.loginInputs[i].PromptStyle = focusedStyle
+						m.loginPage.loginInputs[i].TextStyle = focusedStyle
 						continue
 					}
-					m.loginInputs[i].Blur()
-					m.loginInputs[i].PromptStyle = noStyle
-					m.loginInputs[i].TextStyle = noStyle
+					m.loginPage.loginInputs[i].Blur()
+					m.loginPage.loginInputs[i].PromptStyle = noStyle
+					m.loginPage.loginInputs[i].TextStyle = noStyle
 				}
 
 				return m, tea.Batch(cmds...)
@@ -392,10 +414,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) updateLoginScreenInputs(msg tea.Msg) tea.Cmd {
-	cmds := make([]tea.Cmd, len(m.loginInputs))
+	cmds := make([]tea.Cmd, len(m.loginPage.loginInputs))
 
-	for i := range m.loginInputs {
-		m.loginInputs[i], cmds[i] = m.loginInputs[i].Update(msg)
+	for i := range m.loginPage.loginInputs {
+		m.loginPage.loginInputs[i], cmds[i] = m.loginPage.loginInputs[i].Update(msg)
 	}
 
 	return tea.Batch(cmds...)
@@ -406,25 +428,24 @@ func (m model) View() string {
 	if m.onLoginScreen {
 
 		var b strings.Builder
-		for i := range m.loginInputs {
-			b.WriteString(m.loginInputs[i].View())
-			if i < len(m.loginInputs)-1 {
+		for i := range m.loginPage.loginInputs {
+			b.WriteString(m.loginPage.loginInputs[i].View())
+			if i < len(m.loginPage.loginInputs)-1 {
 				b.WriteRune('\n')
 			}
 		}
 
 		loginButton := &blurredLoginButton
-		if m.focusIdx == len(m.loginInputs) {
+		if m.loginPage.focusIdx == len(m.loginPage.loginInputs) {
 			loginButton = &focusedLoginButton
 		}
 		registerButton := &blurredRegisterButton
-		if m.focusIdx == len(m.loginInputs)+1 {
+		if m.loginPage.focusIdx == len(m.loginPage.loginInputs)+1 {
 			registerButton = &focusedRegisterButton
 		}
 		fmt.Fprintf(&b, "\n\n%s", *loginButton)
-		b.WriteString(" " + m.loginErr + "\n")
-		fmt.Fprintf(&b, "%s\n\n", *registerButton)
-		b.WriteString(" " + m.registerErr + "\n")
+		fmt.Fprintf(&b, "\n\n%s\n\n", *registerButton)
+		b.WriteString(m.loginPage.errMessage)
 
 		return b.String()
 	}
