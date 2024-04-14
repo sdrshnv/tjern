@@ -36,7 +36,7 @@ var (
 	blurredLoginButton    = blurredStyle.Copy().Render("[ Login ]")
 	focusedRegisterButton = focusedStyle.Copy().Render("[ Register ]")
 	blurredRegisterButton = blurredStyle.Copy().Render("[ Register ]")
-	baseUrl               = "https://tjern-worker.tjern.workers.dev/"
+	baseUrl               = "https://tjern-worker.tjern.workers.dev"
 	client                = &http.Client{
 		Timeout: 10 * time.Second,
 	}
