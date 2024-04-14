@@ -361,10 +361,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			switch msg.Type {
-			case tea.KeyEsc:
-				if m.entryPage.textarea.Focused() {
-					m.entryPage.textarea.Blur()
-				}
 			case tea.KeyCtrlC:
 				return m, tea.Quit
 			default:
