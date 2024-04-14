@@ -4,5 +4,9 @@ tjern is a minimal command line journaling application. It encrypts entries on t
 ## Install
 If you have Go installed
 ```
-go install github.com/sudarshanvankudre/tjern@v0.2.0
+go install github.com/sudarshanvankudre/tjern@latest
+```
+## Usage
+```
+tjern
 ```
