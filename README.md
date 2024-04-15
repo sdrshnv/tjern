@@ -6,6 +6,7 @@ If you have Go installed
 ```
 go install github.com/sudarshanvankudre/tjern@latest
 ```
+Make sure the path to the tjern binary is included on your PATH environment variable.
 ## Usage
 ```
 tjern
