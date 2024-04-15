@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/timer"
@@ -59,10 +60,12 @@ type homePageModel struct {
 }
 
 type loginPageModel struct {
-	errTimer    timer.Model
-	focusIdx    int
-	loginInputs []textinput.Model
-	errMessage  string
+	errTimer       timer.Model
+	focusIdx       int
+	loginInputs    []textinput.Model
+	errMessage     string
+	spinner        spinner.Model
+	authenticating bool
 }
 
 type entryPageKeyMap struct {
@@ -139,6 +142,9 @@ func initialModel() model {
 			key.WithHelp("esc", "save entry and go back"),
 		),
 	}
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 	m := model{
 		onLoginScreen:    true,
 		onHomePage:       false,
@@ -146,8 +152,10 @@ func initialModel() model {
 		onReadEntryPage:  false,
 		readEntryContent: "",
 		loginPage: loginPageModel{
-			loginInputs: make([]textinput.Model, 2),
-			errTimer:    timer.New(errTimeout),
+			loginInputs:    make([]textinput.Model, 2),
+			errTimer:       timer.New(errTimeout),
+			spinner:        s,
+			authenticating: false,
 		},
 		homePage: homePageModel{
 			list: list.New(make([]list.Item, 0), list.NewDefaultDelegate(), 0, 0),
@@ -199,7 +207,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.loginPage.spinner.Tick)
 }
 
 func (m model) setListSize() tea.Msg {
@@ -225,6 +233,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.entryPage.help.Width = msg.Width
 		m.homePage.list.SetSize(msg.Width-h, msg.Height-v)
 	case RegisterMsg:
+		m.loginPage.authenticating = false
 		if msg.IsSuccess {
 			m.onLoginScreen = false
 			m.onHomePage = true
@@ -240,6 +249,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loginPage.errTimer.Init()
 		}
 	case LoginMsg:
+		m.loginPage.authenticating = false
 		if msg.IsSuccess {
 			m.onLoginScreen = false
 			m.onHomePage = true
@@ -275,9 +285,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyTab.String(), tea.KeyShiftTab.String(), tea.KeyEnter.String(), tea.KeyUp.String(), tea.KeyDown.String():
 				s := msg.String()
 				if s == tea.KeyEnter.String() && m.loginPage.focusIdx == len(m.loginPage.loginInputs) {
+					m.loginPage.authenticating = true
 					return m, func() tea.Msg { return Login(m.loginPage.loginInputs[0].Value(), m.loginPage.loginInputs[1].Value()) }
 				}
 				if s == tea.KeyEnter.String() && m.loginPage.focusIdx == len(m.loginPage.loginInputs)+1 {
+					m.loginPage.authenticating = true
 					return m, func() tea.Msg {
 						return Register(m.loginPage.loginInputs[0].Value(), m.loginPage.loginInputs[1].Value())
 					}
@@ -308,6 +320,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				return m, tea.Batch(cmds...)
 			}
+		default:
+			var cmd tea.Cmd
+			m.loginPage.spinner, cmd = m.loginPage.spinner.Update(msg)
+			return m, cmd
 		}
 
 		cmd := m.updateLoginScreenInputs(msg)
@@ -439,8 +455,11 @@ func (m model) View() string {
 			registerButton = &focusedRegisterButton
 		}
 		fmt.Fprintf(&b, "\n\n%s", *loginButton)
-		fmt.Fprintf(&b, "\n\n%s\n\n", *registerButton)
-		b.WriteString(m.loginPage.errMessage)
+		fmt.Fprintf(&b, "\n\n%s\n", *registerButton)
+		if m.loginPage.authenticating {
+			b.WriteString(m.loginPage.spinner.View())
+		}
+		b.WriteString(fmt.Sprintf("\n%s", m.loginPage.errMessage))
 
 		return b.String()
 	}
