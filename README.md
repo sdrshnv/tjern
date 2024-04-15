@@ -4,7 +4,10 @@ tjern is a minimal command line journaling application. It encrypts entries on t
 ## Install
 ### Homebrew
 ```
-brew install https://raw.githubusercontent.com/sudarshanvankudre/tjern/main/Formula/tjern.rb
+brew tap sudarshanvankudre/tjern https://github.com/sudarshanvankudre/tjern.git
+```
+```
+brew install sudarshanvankudre/tjern/tjern
 ```
 ### If you have Go installed
 ```
