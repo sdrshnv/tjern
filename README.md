@@ -19,3 +19,6 @@ Make sure the path to the tjern binary is included on your PATH environment vari
 ```
 tjern
 ```
+
+## Feedback
+Feedback/bug reports are appreciated! Please open issues as needed.
