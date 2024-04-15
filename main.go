@@ -611,6 +611,12 @@ func entries(jwt string) tea.Msg {
 }
 
 func Register(username string, password string) tea.Msg {
+	if len(username) == 0 {
+		return RegisterMsg{Err: "username cannot be empty"}
+	}
+	if len(password) == 0 {
+		return RegisterMsg{Err: "password cannot be empty"}
+	}
 	data := map[string]string{
 		"username": username,
 		"password": password,
