@@ -2,11 +2,16 @@
 tjern is a minimal command line journaling application. It encrypts entries on the client so only you can read your content.
 
 ## Install
-If you have Go installed
+### Homebrew
+```
+brew install https://raw.githubusercontent.com/sudarshanvankudre/tjern/main/Formula/tjern.rb
+```
+### If you have Go installed
 ```
 go install github.com/sudarshanvankudre/tjern@latest
 ```
 Make sure the path to the tjern binary is included on your PATH environment variable.
+
 ## Usage
 ```
 tjern
