@@ -333,6 +333,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			switch msg.String() {
 			case tea.KeyEnter.String():
+				if len(m.homePage.list.Items()) == 0 {
+					return m, nil
+				}
 				m.onHomePage = false
 				m.onEntryPage = false
 				m.onLoginScreen = false
