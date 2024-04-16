@@ -45,8 +45,6 @@ var (
 	timeFormat = time.RFC822
 )
 
-const errTimeout = time.Second * 2
-
 type EntryItem struct {
 	encryptedContent string
 	createdTs        time.Time
@@ -156,7 +154,6 @@ func initialModel() model {
 		readEntryContent: "",
 		loginPage: loginPageModel{
 			loginInputs:    make([]textinput.Model, 2),
-			errTimer:       timer.New(errTimeout),
 			spinner:        s,
 			authenticating: false,
 		},
@@ -227,7 +224,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(loginCmd, homeCmd)
 	case timer.TimeoutMsg:
 		if msg.ID == m.loginPage.errTimer.ID() {
-		m.loginPage.errTimer = timer.New(errTimeout)
+			m.loginPage.errTimer = timer.New(time.Second)
 		m.loginPage.errMessage = ""
 		}
 		if msg.ID == m.homePage.errTimer.ID() {
@@ -256,6 +253,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Sequence(entriesCmd, m.setListSize)
 		} else {
 			m.loginPage.errMessage = msg.Err
+			m.loginPage.errTimer = timer.New(time.Second)
 			return m, m.loginPage.errTimer.Init()
 		}
 	case LoginMsg:
@@ -272,6 +270,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Sequence(entriesCmd, m.setListSize)
 		} else {
 			m.loginPage.errMessage = msg.Err
+			m.loginPage.errTimer = timer.New(time.Second)
 			return m, m.loginPage.errTimer.Init()
 		}
 	case EntriesMsg:
@@ -474,7 +473,9 @@ func (m model) View() string {
 		if m.loginPage.authenticating {
 			b.WriteString(m.loginPage.spinner.View())
 		}
+		if m.loginPage.errTimer.Running() {
 		b.WriteString(fmt.Sprintf("\n%s", m.loginPage.errMessage))
+		}
 
 		return b.String()
 	}
@@ -689,6 +690,12 @@ func Register(username string, password string) tea.Msg {
 }
 
 func Login(username string, password string) tea.Msg {
+	if len(username) == 0 {
+		return RegisterMsg{Err: "username cannot be empty"}
+	}
+	if len(password) == 0 {
+		return RegisterMsg{Err: "password cannot be empty"}
+	}
 	data := map[string]string{
 		"username": username,
 		"password": password,
