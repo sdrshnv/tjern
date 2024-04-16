@@ -28,6 +28,7 @@ import (
 )
 
 var (
+	errStyle              = lipgloss.NewStyle().Background(lipgloss.Color("900"))
 	docStyle              = lipgloss.NewStyle().Margin(1, 2)
 	focusedStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	blurredStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -56,7 +57,9 @@ func (i EntryItem) Description() string { return i.encryptedContent }
 func (i EntryItem) FilterValue() string { return i.createdTs.Format(timeFormat) }
 
 type homePageModel struct {
-	list list.Model
+	list       list.Model
+	errTimer   timer.Model
+	errMessage string
 }
 
 type loginPageModel struct {
@@ -169,8 +172,8 @@ func initialModel() model {
 	}
 
 	additionalListBindings := []key.Binding{
-		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
 		key.NewBinding(key.WithKeys("ctrl-n"), key.WithHelp("ctrl-n", "new")),
+		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
 	}
 
 	m.homePage.list.AdditionalShortHelpKeys = func() []key.Binding {
@@ -217,12 +220,19 @@ func (m model) setListSize() tea.Msg {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case timer.TickMsg:
-		var cmd tea.Cmd
-		m.loginPage.errTimer, cmd = m.loginPage.errTimer.Update(msg)
-		return m, cmd
+		var loginCmd tea.Cmd
+		var homeCmd tea.Cmd
+		m.loginPage.errTimer, loginCmd = m.loginPage.errTimer.Update(msg)
+		m.homePage.errTimer, homeCmd = m.homePage.errTimer.Update(msg)
+		return m, tea.Batch(loginCmd, homeCmd)
 	case timer.TimeoutMsg:
+		if msg.ID == m.loginPage.errTimer.ID() {
 		m.loginPage.errTimer = timer.New(errTimeout)
 		m.loginPage.errMessage = ""
+		}
+		if msg.ID == m.homePage.errTimer.ID() {
+			m.homePage.errMessage = ""
+		}
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.windowHeight = msg.Height
@@ -334,7 +344,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case tea.KeyEnter.String():
 				if len(m.homePage.list.Items()) == 0 {
-					return m, nil
+					m.homePage.errMessage = "Create an Entry First!"
+					m.homePage.errTimer = timer.New(time.Second)
+					return m, m.homePage.errTimer.Init()
 				}
 				m.onHomePage = false
 				m.onEntryPage = false
@@ -467,6 +479,9 @@ func (m model) View() string {
 		return b.String()
 	}
 	if m.onHomePage {
+		if m.homePage.errTimer.Running() {
+			return errStyle.Render(m.homePage.errMessage)
+		}
 		return docStyle.Render(m.homePage.list.View())
 	}
 	if m.onEntryPage {
