@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	errStyle              = lipgloss.NewStyle().Background(lipgloss.Color("900"))
+	errStyle              = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
 	docStyle              = lipgloss.NewStyle().Margin(1, 2)
 	focusedStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	blurredStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -344,7 +344,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEnter.String():
 				if len(m.homePage.list.Items()) == 0 {
 					m.homePage.errMessage = "Create an Entry First!"
-					m.homePage.errTimer = timer.New(time.Second)
+					m.homePage.errTimer = timer.New(time.Millisecond)
 					return m, m.homePage.errTimer.Init()
 				}
 				m.onHomePage = false
@@ -481,7 +481,7 @@ func (m model) View() string {
 	}
 	if m.onHomePage {
 		if m.homePage.errTimer.Running() {
-			return errStyle.Render(m.homePage.errMessage)
+			return errStyle.Copy().Render(m.homePage.errMessage)
 		}
 		return docStyle.Render(m.homePage.list.View())
 	}
