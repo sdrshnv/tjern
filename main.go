@@ -50,6 +50,11 @@ type EntryItem struct {
 	createdTs        time.Time
 }
 
+type Credential struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 func (i EntryItem) Title() string       { return i.createdTs.Format(timeFormat) }
 func (i EntryItem) Description() string { return i.encryptedContent }
 func (i EntryItem) FilterValue() string { return i.createdTs.Format(timeFormat) }
@@ -206,8 +211,43 @@ func initialModel() model {
 	return m
 }
 
+// TODO: Error messaging not working yet here
+func (m model) autoLogin() tea.Msg {
+	appDir, err := appDirPath()
+	if err != nil {
+		m.loginPage.errMessage = "Unable to locate application directory, defaulting to manual login"
+		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
+		return m.loginPage.errTimer.Init()
+	}
+	jsonBytes, err := os.ReadFile(appDir + "/cred.json")
+	if err != nil {
+		m.loginPage.errMessage = "Unable to read credentials, defaulting to manual login"
+		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
+		return m.loginPage.errTimer.Init()
+	}
+	var cred Credential
+	err = json.Unmarshal(jsonBytes, &cred)
+	if err != nil {
+		m.loginPage.errMessage = "Unable to unmarshal credentials, defaulting to manual login"
+		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
+		return m.loginPage.errTimer.Init()
+	}
+	if cred.Username == "" {
+		m.loginPage.errMessage = "username is empty"
+		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
+		return m.loginPage.errTimer.Init()
+	}
+	if cred.Password == "" {
+		m.loginPage.errMessage = "username is empty"
+		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
+		return m.loginPage.errTimer.Init()
+	}
+	return Login(cred.Username, cred.Password)
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.loginPage.spinner.Tick)
+	autoLoginCmd := func() tea.Msg { return m.autoLogin() }
+	return tea.Batch(textinput.Blink, m.loginPage.spinner.Tick, autoLoginCmd)
 }
 
 func (m model) setListSize() tea.Msg {
@@ -250,7 +290,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
 			m.derivedKey = dk
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
-			return m, tea.Sequence(entriesCmd, m.setListSize)
+			cred := Credential{Username: msg.Username, Password: msg.Password}
+			saveCredCmd := func() tea.Msg { return saveCredential(cred) }
+			return m, tea.Batch(tea.Sequence(entriesCmd, m.setListSize), saveCredCmd)
 		} else {
 			m.loginPage.errMessage = msg.Err
 			m.loginPage.errTimer = timer.New(time.Second)
@@ -267,7 +309,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
 			m.derivedKey = dk
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
-			return m, tea.Sequence(entriesCmd, m.setListSize)
+			cred := Credential{Username: msg.Username, Password: msg.Password}
+			saveCredCmd := func() tea.Msg { return saveCredential(cred) }
+			return m, tea.Batch(tea.Sequence(entriesCmd, m.setListSize), saveCredCmd)
 		} else {
 			m.loginPage.errMessage = msg.Err
 			m.loginPage.errTimer = timer.New(time.Second)
@@ -295,7 +339,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				s := msg.String()
 				if s == tea.KeyEnter.String() && m.loginPage.focusIdx == len(m.loginPage.loginInputs) {
 					m.loginPage.authenticating = true
-					return m, func() tea.Msg { return Login(m.loginPage.loginInputs[0].Value(), m.loginPage.loginInputs[1].Value()) }
+					return m, func() tea.Msg {
+						return Login(m.loginPage.loginInputs[0].Value(), m.loginPage.loginInputs[1].Value())
+					}
 				}
 				if s == tea.KeyEnter.String() && m.loginPage.focusIdx == len(m.loginPage.loginInputs)+1 {
 					m.loginPage.authenticating = true
@@ -497,6 +543,35 @@ func (m model) View() string {
 	return "Unclear which page we're on!"
 }
 
+func appDirPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	appDir := homeDir + "/.tjern"
+	return appDir, nil
+}
+
+func createAppDirFiles() error {
+	appDir, err := appDirPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(appDir); os.IsNotExist(err) {
+		if err := os.Mkdir(appDir, os.ModeDir|os.ModePerm); err != nil {
+			return err
+		}
+	}
+	if _, err = os.Stat(appDir + "/cred.json"); os.IsNotExist(err) {
+		f, err := os.Create(appDir + "/cred.json")
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+	}
+	return nil
+}
+
 func main() {
 
 	if len(os.Getenv("DEBUG")) > 0 {
@@ -508,7 +583,13 @@ func main() {
 		defer f.Close()
 	}
 
-	if _, err := tea.NewProgram(initialModel(), tea.WithAltScreen()).Run(); err != nil {
+	err := createAppDirFiles()
+	if err != nil {
+		fmt.Println("Error creating application files: ", err)
+		return
+	}
+
+	if _, err = tea.NewProgram(initialModel(), tea.WithAltScreen()).Run(); err != nil {
 		fmt.Printf("could not start program: %s\n", err)
 		os.Exit(1)
 	}
@@ -646,6 +727,26 @@ func entries(jwt string) tea.Msg {
 		entries[i] = eItem
 	}
 	return EntriesMsg{Err: "", IsSuccess: true, Entries: entries}
+}
+
+type SaveCredentialMsg struct {
+	Err error
+}
+
+func saveCredential(c Credential) tea.Msg {
+	appDir, err := appDirPath()
+	if err != nil {
+		return SaveCredentialMsg{Err: err}
+	}
+	credBytes, err := json.MarshalIndent(&c, "", "    ")
+	if err != nil {
+		return SaveCredentialMsg{Err: err}
+	}
+	err = os.WriteFile(appDir+"/cred.json", credBytes, os.ModePerm)
+	if err != nil {
+		return SaveCredentialMsg{Err: err}
+	}
+	return nil
 }
 
 func Register(username string, password string) tea.Msg {
