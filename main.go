@@ -150,6 +150,7 @@ func initialModel() model {
 	}
 	s := spinner.New()
 	s.Spinner = spinner.Dot
+	s.Spinner.FPS = time.Second / 10
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 	m := model{
 		onLoginScreen:    true,
@@ -160,7 +161,7 @@ func initialModel() model {
 		loginPage: loginPageModel{
 			loginInputs:    make([]textinput.Model, 2),
 			spinner:        s,
-			authenticating: false,
+			authenticating: true,
 		},
 		homePage: homePageModel{
 			list: list.New(make([]list.Item, 0), list.NewDefaultDelegate(), 0, 0),
@@ -211,44 +212,36 @@ func initialModel() model {
 	return m
 }
 
-// TODO: Error messaging not working yet here
+type AutoLoginMsg struct {
+	Error error
+}
+
 func (m model) autoLogin() tea.Msg {
 	appDir, err := appDirPath()
 	if err != nil {
-		m.loginPage.errMessage = "Unable to locate application directory, defaulting to manual login"
-		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
-		return m.loginPage.errTimer.Init()
+		return AutoLoginMsg{Error: err}
 	}
 	jsonBytes, err := os.ReadFile(appDir + "/cred.json")
 	if err != nil {
-		m.loginPage.errMessage = "Unable to read credentials, defaulting to manual login"
-		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
-		return m.loginPage.errTimer.Init()
+		return AutoLoginMsg{Error: err}
 	}
 	var cred Credential
 	err = json.Unmarshal(jsonBytes, &cred)
 	if err != nil {
-		m.loginPage.errMessage = "Unable to unmarshal credentials, defaulting to manual login"
-		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
-		return m.loginPage.errTimer.Init()
+		return AutoLoginMsg{Error: err}
 	}
 	if cred.Username == "" {
-		m.loginPage.errMessage = "username is empty"
-		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
-		return m.loginPage.errTimer.Init()
+		return AutoLoginMsg{Error: err}
 	}
 	if cred.Password == "" {
-		m.loginPage.errMessage = "username is empty"
-		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
-		return m.loginPage.errTimer.Init()
+		return AutoLoginMsg{Error: err}
 	}
-	m.loginPage.authenticating = true
 	return Login(cred.Username, cred.Password)
 }
 
 func (m model) Init() tea.Cmd {
 	autoLoginCmd := func() tea.Msg { return m.autoLogin() }
-	return tea.Batch(textinput.Blink, m.loginPage.spinner.Tick, autoLoginCmd)
+	return tea.Batch(textinput.Blink, tea.Sequence(m.loginPage.spinner.Tick, autoLoginCmd))
 }
 
 func (m model) setListSize() tea.Msg {
@@ -257,12 +250,21 @@ func (m model) setListSize() tea.Msg {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case AutoLoginMsg:
+		if msg.Error != nil {
+			m.loginPage.authenticating = false
+			return m, nil
+		}
 	case timer.TickMsg:
 		var loginCmd tea.Cmd
 		var homeCmd tea.Cmd
 		m.loginPage.errTimer, loginCmd = m.loginPage.errTimer.Update(msg)
 		m.homePage.errTimer, homeCmd = m.homePage.errTimer.Update(msg)
 		return m, tea.Batch(loginCmd, homeCmd)
+	case spinner.TickMsg:
+		var loginSpinnerCmd tea.Cmd
+		m.loginPage.spinner, loginSpinnerCmd = m.loginPage.spinner.Update(msg)
+		return m, loginSpinnerCmd
 	case timer.TimeoutMsg:
 		if msg.ID == m.loginPage.errTimer.ID() {
 			m.loginPage.errTimer = timer.New(time.Second)
@@ -330,6 +332,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if m.onLoginScreen {
+		if m.loginPage.authenticating {
+			return m, nil
+		}
 
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
@@ -377,9 +382,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(cmds...)
 			}
 		default:
-			var cmd tea.Cmd
-			m.loginPage.spinner, cmd = m.loginPage.spinner.Update(msg)
-			return m, cmd
+			return m, nil
 		}
 
 		cmd := m.updateLoginScreenInputs(msg)
