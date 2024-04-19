@@ -19,6 +19,7 @@ Make sure the path to the tjern binary is included on your PATH environment vari
 ```
 tjern
 ```
+On your first usage, you'll need to create an account and enter credentials, but afterwards, you won't need to enter them again.
 
 ## Feedback
 Feedback/bug reports are appreciated! Please open issues as needed.
