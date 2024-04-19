@@ -242,6 +242,7 @@ func (m model) autoLogin() tea.Msg {
 		m.loginPage.errTimer = timer.NewWithInterval(2*time.Second, 500*time.Millisecond)
 		return m.loginPage.errTimer.Init()
 	}
+	m.loginPage.authenticating = true
 	return Login(cred.Username, cred.Password)
 }
 
@@ -497,6 +498,9 @@ func (m *model) updateLoginScreenInputs(msg tea.Msg) tea.Cmd {
 func (m model) View() string {
 
 	if m.onLoginScreen {
+		if m.loginPage.authenticating {
+			return m.loginPage.spinner.View()
+		}
 
 		var b strings.Builder
 		for i := range m.loginPage.loginInputs {
@@ -516,9 +520,6 @@ func (m model) View() string {
 		}
 		fmt.Fprintf(&b, "\n\n%s", *loginButton)
 		fmt.Fprintf(&b, "\n\n%s\n", *registerButton)
-		if m.loginPage.authenticating {
-			b.WriteString(m.loginPage.spinner.View())
-		}
 		if m.loginPage.errTimer.Running() {
 		b.WriteString(fmt.Sprintf("\n%s", m.loginPage.errMessage))
 		}
