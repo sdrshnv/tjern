@@ -69,7 +69,7 @@ func (i EntryItem) Description() string {
 func (i EntryItem) FilterValue() string {
 	plainContent, err := decrypt(i.encryptedContent, derivedKey)
 	if err != nil {
-		return i.createdTs.Format(timeFormat)
+		return "Error with decryption!"
 	}
 	return plainContent
 }
