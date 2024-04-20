@@ -43,6 +43,7 @@ var (
 		Timeout: 10 * time.Second,
 	}
 	timeFormat = time.RFC822
+	derivedKey []byte
 )
 
 type EntryItem struct {
@@ -55,9 +56,23 @@ type Credential struct {
 	Password string `json:"password"`
 }
 
-func (i EntryItem) Title() string       { return i.createdTs.Format(timeFormat) }
-func (i EntryItem) Description() string { return i.encryptedContent }
-func (i EntryItem) FilterValue() string { return i.createdTs.Format(timeFormat) }
+func (i EntryItem) Title() string { 
+	plainContent, err := decrypt(i.encryptedContent, derivedKey)
+	if err != nil {
+		return i.encryptedContent
+	}
+	return plainContent
+}
+func (i EntryItem) Description() string {
+	return i.createdTs.Format(timeFormat) 
+}
+func (i EntryItem) FilterValue() string {
+	plainContent, err := decrypt(i.encryptedContent, derivedKey)
+	if err != nil {
+		return i.createdTs.Format(timeFormat)
+	}
+	return plainContent
+}
 
 type homePageModel struct {
 	list       list.Model
@@ -116,7 +131,6 @@ type model struct {
 	loginPage        loginPageModel
 	homePage         homePageModel
 	entryPage        entryPageModel
-	derivedKey       []byte
 }
 
 func initialModel() model {
@@ -291,7 +305,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hexSalt = msg.HexSalt
 			m.username = msg.Username
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
-			m.derivedKey = dk
+			derivedKey = dk
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
 			cred := Credential{Username: msg.Username, Password: msg.Password}
 			saveCredCmd := func() tea.Msg { return saveCredential(cred) }
@@ -310,7 +324,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hexSalt = msg.HexSalt
 			m.username = msg.Username
 			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
-			m.derivedKey = dk
+			derivedKey = dk
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
 			cred := Credential{Username: msg.Username, Password: msg.Password}
 			saveCredCmd := func() tea.Msg { return saveCredential(cred) }
@@ -406,7 +420,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !ok {
 					return m, nil
 				}
-				plainContent, err := decrypt(entryItem.encryptedContent, m.derivedKey)
+				plainContent, err := decrypt(entryItem.encryptedContent, derivedKey)
 				if err != nil {
 					return m, nil
 				}
@@ -442,7 +456,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(strings.TrimSpace(plainContent)) == 0 {
 					return m, nil
 				}
-				cipherContent, err := encrypt(plainContent, m.derivedKey)
+				cipherContent, err := encrypt(plainContent, derivedKey)
 				if err != nil {
 					return m, func() tea.Msg { return SaveEntryMsg{Err: err} }
 				}
