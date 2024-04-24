@@ -189,7 +189,7 @@ func initialModel() model {
 	}
 
 	additionalListBindings := []key.Binding{
-		key.NewBinding(key.WithKeys("ctrl-n"), key.WithHelp("ctrl-n", "new")),
+		key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new")),
 		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
 	}
 
@@ -426,7 +426,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.readEntryContent = plainContent
 				return m, nil
-			case tea.KeyCtrlN.String():
+			case "n":
 				m.onHomePage = false
 				m.onEntryPage = true
 				m.onLoginScreen = false
