@@ -21,7 +21,7 @@ tjern
 ```
 On your first usage, you'll need to create an account and enter credentials, but afterwards, you won't need to enter them again.
 
-After your credentials are saved, you quickly create an entry with the following usage without going through the UI.
+After your credentials are saved, you can quickly create an entry without going through the UI.
 ```
 tjern -n This is a new entry without going through the UI.
 ```
