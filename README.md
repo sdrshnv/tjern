@@ -1,5 +1,5 @@
 # tjern
-`tjern` is a minimal command line journaling application. Entries are encrypted on the client by default and synced to the cloud, for access from any computer. 
+`tjern` is a minimal command line journaling application. Entries are encrypted on the client by default and synced to the cloud, for peace of mind, wherever you are. 
 
 ## Install
 ### Homebrew
