@@ -2,7 +2,7 @@ class Tjern < Formula
   desc "A happy little journaling app"
   homepage "https://github.com/sudarshanvankudre/tjern"
   url "https://github.com/sudarshanvankudre/tjern/archive/refs/tags/v0.6.0.tar.gz"
-  sha256 "c4836f91d9713ad6051b2843f9eef4b6eaa43130be625b92eb3c243283365489"
+  sha256 "6670acdb4a172122f7c29e29bddaea2ffcdf1995d835be6de7ca732ff4c30fad"
   license "GPL-3.0"
 
   depends_on "go" => :build
