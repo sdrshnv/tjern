@@ -8,6 +8,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -230,31 +231,39 @@ type AutoLoginMsg struct {
 	Error error
 }
 
-func (m model) autoLogin() tea.Msg {
+func readCredential() (Credential, error) {
 	appDir, err := appDirPath()
 	if err != nil {
-		return AutoLoginMsg{Error: err}
+		return Credential{}, err
 	}
 	jsonBytes, err := os.ReadFile(appDir + "/cred.json")
 	if err != nil {
-		return AutoLoginMsg{Error: err}
+		return Credential{}, err
 	}
 	var cred Credential
 	err = json.Unmarshal(jsonBytes, &cred)
 	if err != nil {
-		return AutoLoginMsg{Error: err}
+		return Credential{}, err
 	}
 	if cred.Username == "" {
-		return AutoLoginMsg{Error: err}
+		return Credential{}, err
 	}
 	if cred.Password == "" {
+		return Credential{}, err
+	}
+	return cred, nil
+}
+
+func autoLogin() tea.Msg {
+	cred, err := readCredential()
+	if err != nil {
 		return AutoLoginMsg{Error: err}
 	}
 	return Login(cred.Username, cred.Password)
 }
 
 func (m model) Init() tea.Cmd {
-	autoLoginCmd := func() tea.Msg { return m.autoLogin() }
+	autoLoginCmd := func() tea.Msg { return autoLogin() }
 	return tea.Batch(textinput.Blink, tea.Sequence(m.loginPage.spinner.Tick, autoLoginCmd))
 }
 
@@ -591,6 +600,41 @@ func createAppDirFiles() error {
 }
 
 func main() {
+	newEntryPtr := flag.Bool("n", false, "Create a new entry without entering the TUI. Assumes credentials are saved.")
+	flag.Parse()
+	if *newEntryPtr {
+		entry := strings.Join(flag.Args(), " ")
+		if len(strings.TrimSpace(entry)) == 0 {
+			fmt.Println("Your entry is empty!")
+			return
+		}
+		cred, err := readCredential()
+		if err != nil {
+			fmt.Println("Error reading credentials! Please make sure you've registered an account.")
+			return
+		}
+		loginMsg, ok := Login(cred.Username, cred.Password).(LoginMsg)
+		if !ok {
+			fmt.Println("Login has the wrong msg type! Please raise an issue on Github if one isn't there already.")
+			return
+		}
+		if !loginMsg.IsSuccess {
+			fmt.Println("Failed to login! ", loginMsg.Err)
+			return
+		}
+		createTs := time.Now()
+		saveEntryMsg, ok := saveEntry(entry, loginMsg.Jwt, createTs.Format(timeFormat)).(SaveEntryMsg)
+		if !ok {
+			fmt.Println("Save entry has wrong msg type! Please raise an issue on Github if one isn't there already.")
+			return
+		}
+		if saveEntryMsg.Err != nil {
+			fmt.Println("Error saving entry. ", saveEntryMsg.Err)
+			return
+		}
+		fmt.Println("Entry saved!")
+		return
+	}
 
 	if len(os.Getenv("DEBUG")) > 0 {
 		f, err := tea.LogToFile("debug.log", "debug")
@@ -810,10 +854,10 @@ func Register(username string, password string) tea.Msg {
 
 func Login(username string, password string) tea.Msg {
 	if len(username) == 0 {
-		return RegisterMsg{Err: "username cannot be empty"}
+		return LoginMsg{Err: "username cannot be empty"}
 	}
 	if len(password) == 0 {
-		return RegisterMsg{Err: "password cannot be empty"}
+		return LoginMsg{Err: "password cannot be empty"}
 	}
 	data := map[string]string{
 		"username": username,
