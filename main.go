@@ -271,6 +271,10 @@ func (m model) setListSize() tea.Msg {
 	return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth}
 }
 
+func deriveKey(password string, salt string) []byte {
+	return pbkdf2.Key([]byte(password), []byte(salt), 4096, 32, sha512.New)
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case AutoLoginMsg:
@@ -313,8 +317,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.jwt = msg.Jwt
 			m.hexSalt = msg.HexSalt
 			m.username = msg.Username
-			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
-			derivedKey = dk
+			derivedKey = deriveKey(msg.Password, msg.HexSalt)
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
 			cred := Credential{Username: msg.Username, Password: msg.Password}
 			saveCredCmd := func() tea.Msg { return saveCredential(cred) }
@@ -332,8 +335,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.jwt = msg.Jwt
 			m.hexSalt = msg.HexSalt
 			m.username = msg.Username
-			dk := pbkdf2.Key([]byte(msg.Password), []byte(msg.HexSalt), 4096, 32, sha512.New)
-			derivedKey = dk
+			derivedKey = deriveKey(msg.Password, msg.HexSalt)
 			entriesCmd := func() tea.Msg { return entries(m.jwt) }
 			cred := Credential{Username: msg.Username, Password: msg.Password}
 			saveCredCmd := func() tea.Msg { return saveCredential(cred) }
@@ -623,7 +625,13 @@ func main() {
 			return
 		}
 		createTs := time.Now()
-		saveEntryMsg, ok := saveEntry(entry, loginMsg.Jwt, createTs.Format(timeFormat)).(SaveEntryMsg)
+		dk := deriveKey(cred.Password, loginMsg.HexSalt)
+		cipherContent, err := encrypt(entry, dk)
+		if err != nil {
+			fmt.Println("Error encrypting your entry. Please raise a Github issue if not already raised.")
+			return
+		}
+		saveEntryMsg, ok := saveEntry(cipherContent, loginMsg.Jwt, createTs.Format(timeFormat)).(SaveEntryMsg)
 		if !ok {
 			fmt.Println("Save entry has wrong msg type! Please raise an issue on Github if one isn't there already.")
 			return
