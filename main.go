@@ -25,6 +25,7 @@ import (
 	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -567,7 +568,7 @@ func (m model) View() string {
 		return b.String()
 	}
 	if m.onReadEntryPage {
-		return m.readEntryContent
+		return wordwrap.String(m.readEntryContent, m.windowWidth)
 	}
 	return "Unclear which page we're on!"
 }
