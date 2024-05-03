@@ -504,8 +504,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	} else if m.onReadEntryPage {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
-			switch msg.Type {
-			case tea.KeyEsc:
+			switch msg.String() {
+			case "q", tea.KeyEsc.String():
 				m.onHomePage = true
 				m.onLoginScreen = false
 				m.onEntryPage = false
