@@ -64,6 +64,9 @@ func (i EntryItem) Title() string {
 		return i.encryptedContent
 	}
 	titleCharLimit := 15
+	if len(plainContent) < titleCharLimit {
+		return plainContent
+	}
 	return plainContent[:titleCharLimit] + "..."
 }
 
