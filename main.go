@@ -58,7 +58,7 @@ type Credential struct {
 	Password string `json:"password"`
 }
 
-func (i EntryItem) Title() string { 
+func (i EntryItem) Title() string {
 	plainContent, err := decrypt(i.encryptedContent, derivedKey)
 	if err != nil {
 		return i.encryptedContent
@@ -71,7 +71,7 @@ func (i EntryItem) Title() string {
 }
 
 func (i EntryItem) Description() string {
-	return i.createdTs.Format(timeFormat) 
+	return i.createdTs.Format(timeFormat)
 }
 
 func (i EntryItem) FilterValue() string {
@@ -302,7 +302,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case timer.TimeoutMsg:
 		if msg.ID == m.loginPage.errTimer.ID() {
 			m.loginPage.errTimer = timer.New(time.Second)
-		m.loginPage.errMessage = ""
+			m.loginPage.errMessage = ""
 		}
 		if msg.ID == m.homePage.errTimer.ID() {
 			m.homePage.errMessage = ""
@@ -556,7 +556,7 @@ func (m model) View() string {
 		fmt.Fprintf(&b, "\n\n%s", *loginButton)
 		fmt.Fprintf(&b, "\n\n%s\n", *registerButton)
 		if m.loginPage.errTimer.Running() {
-		b.WriteString(fmt.Sprintf("\n%s", m.loginPage.errMessage))
+			b.WriteString(fmt.Sprintf("\n%s", m.loginPage.errMessage))
 		}
 
 		return b.String()
