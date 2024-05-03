@@ -63,11 +63,14 @@ func (i EntryItem) Title() string {
 	if err != nil {
 		return i.encryptedContent
 	}
-	return plainContent
+	titleCharLimit := 15
+	return plainContent[:titleCharLimit] + "..."
 }
+
 func (i EntryItem) Description() string {
 	return i.createdTs.Format(timeFormat) 
 }
+
 func (i EntryItem) FilterValue() string {
 	plainContent, err := decrypt(i.encryptedContent, derivedKey)
 	if err != nil {
