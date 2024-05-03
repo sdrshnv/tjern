@@ -1,3 +1,6 @@
+https://github.com/sudarshanvankudre/tjern/assets/20431892/a9d299b5-59b7-4cd3-af00-2858a3541101
+
+
 # tjern
 `tjern` is a minimal command line journaling application. Entries are end-to-end encrypted by default and synced to the cloud, for peace of mind, wherever you are. 
 
