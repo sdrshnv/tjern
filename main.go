@@ -77,7 +77,6 @@ type homePageModel struct {
 	errMessage string
 }
 
-
 type entryPageKeyMap struct {
 	Up    key.Binding
 	Down  key.Binding
@@ -223,7 +222,6 @@ func (m model) Init() tea.Cmd {
 func (m model) setListSize() tea.Msg {
 	return tea.WindowSizeMsg{Height: m.windowHeight, Width: m.windowWidth}
 }
-
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -552,8 +550,67 @@ func createAppDirFiles() error {
 }
 
 func main() {
+	exportPtr := flag.Bool("export", false, "Export all entries to your local machine. Assumes credentials are saved.")
 	newEntryPtr := flag.Bool("n", false, "Create a new entry without entering the TUI. Assumes credentials are saved.")
 	flag.Parse()
+	if *exportPtr {
+		cred, err := readCredential()
+		fmt.Println("Reading credentials...")
+		if err != nil {
+			fmt.Println("Error reading credentials! Please make sure you've registered an account.")
+			return
+		}
+		fmt.Println("Logging in...")
+		loginMsg, ok := Login(cred.Username, cred.Password).(LoginMsg)
+		if !ok {
+			fmt.Println("Login has the wrong msg type! Please raise an issue on Github if one isn't there already.")
+			return
+		}
+		if !loginMsg.IsSuccess {
+			fmt.Println("Failed to login! ", loginMsg.Err)
+			return
+		}
+		fmt.Println("Getting entries...")
+		entriesMsg, ok := entries(loginMsg.Jwt).(EntriesMsg)
+		if !ok {
+			fmt.Println("entries has the wrong msg type! Please raise an issue on Github if one isn't there already.")
+			return
+		}
+		if !entriesMsg.IsSuccess {
+			fmt.Printf("Error getting entries: %s", entriesMsg.Err)
+			return
+		}
+		fmt.Println("Creating export file...")
+		appDir, err := appDirPath()
+		if err != nil {
+			fmt.Printf("Error getting app dir path: %s", err)
+			return
+		}
+		exportPath := appDir + "/entries.txt"
+		f, err := os.Create(exportPath)
+		if err != nil {
+			fmt.Printf("Error creating entries export file: %s", err)
+			return
+		}
+		defer f.Close()
+		var content strings.Builder
+		dk := deriveKey(loginMsg.Password, loginMsg.HexSalt)
+		for _, e := range entriesMsg.Entries {
+			plaintext, err := decrypt(e.encryptedContent, dk)
+			if err != nil {
+				fmt.Printf("Error decrypting content: %s", err)
+				return
+			}
+			fmt.Fprintf(&content, "%s\n%s\n\n", e.createdTs.String(), plaintext)
+		}
+		_, err = f.WriteString(content.String())
+		if err != nil {
+			fmt.Printf("Error writing content to export file: %s", err)
+			return
+		}
+		fmt.Printf("Entries exported to %s\n", exportPath)
+		return
+	}
 	if *newEntryPtr {
 		entry := strings.Join(flag.Args(), " ")
 		if len(strings.TrimSpace(entry)) == 0 {
