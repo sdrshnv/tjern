@@ -6,16 +6,11 @@
 ## Install
 ### Homebrew
 ```
-brew tap sudarshanvankudre/tjern https://github.com/sudarshanvankudre/tjern.git
+brew tap sdrshnv/tjern https://github.com/sdrshnv/tjern.git
 ```
 ```
-brew install sudarshanvankudre/tjern/tjern
+brew install sdrshnv/tjern/tjern
 ```
-### If you have Go installed
-```
-go install github.com/sudarshanvankudre/tjern@latest
-```
-Make sure the path to the tjern binary is included on your PATH environment variable.
 
 ## Usage
 ```
