@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/xdg-go/pbkdf2"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 var (
