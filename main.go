@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -296,6 +297,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case EntriesMsg:
 		if msg.IsSuccess {
 			items := make([]list.Item, len(msg.Entries))
+			slices.SortFunc(msg.Entries, func(e1, e2 EntryItem) int {
+				return e2.createdTs.Compare(e1.createdTs)
+			})
 			for i, e := range msg.Entries {
 				items[i] = e
 			}
