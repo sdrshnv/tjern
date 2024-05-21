@@ -54,6 +54,7 @@ func (i EntryItem) Title() string {
 		return i.encryptedContent
 	}
 	titleCharLimit := 15
+	plainContent = strings.ReplaceAll(plainContent, "\n", " ")
 	if len(plainContent) < titleCharLimit {
 		return plainContent
 	}
