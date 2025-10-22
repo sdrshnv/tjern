@@ -22,3 +22,6 @@ go.work
 
 # Log files
 *.log
+
+# Binary
+tjern

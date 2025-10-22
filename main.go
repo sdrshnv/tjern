@@ -125,6 +125,7 @@ type model struct {
 
 func initialModel() model {
 	ta := textarea.New()
+	ta.CharLimit = 0
 	ta.Focus()
 	var keys = entryPageKeyMap{
 		Up: key.NewBinding(
